@@ -709,6 +709,10 @@ void update_textview(const gchar *text)
     gtk_text_buffer_insert(buffer, &iter, text, -1);
 }
 
+void on_dialog_response(GtkDialog *dialog, gint response_id, gpointer user_data) {
+    gtk_widget_destroy(GTK_WIDGET(dialog));
+}
+
 void onDisplayButtonClicked(GtkWidget *widget, gpointer data)
 {
     char **filePaths = getPathsFromFile();
@@ -717,10 +721,11 @@ void onDisplayButtonClicked(GtkWidget *widget, gpointer data)
     dialog = gtk_dialog_new_with_buttons("Liste des chemins surveillés",
                                          GTK_WINDOW(window),
                                          GTK_DIALOG_MODAL,
-                                         "_Fermer",
-                                         GTK_RESPONSE_CLOSE,
                                          NULL);
 
+    g_signal_connect(dialog, "response", G_CALLBACK(on_dialog_response), NULL);
+    gtk_dialog_add_button(GTK_DIALOG(dialog), "Fermer", GTK_RESPONSE_CLOSE);
+    
     GtkWidget *contentArea = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
 
     GtkWidget *label = gtk_label_new(NULL);
