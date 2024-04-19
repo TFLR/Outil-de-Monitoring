@@ -1,4 +1,5 @@
 #include <gtk/gtk.h>
+#include <gtk/gtk.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,8 +13,6 @@
 #include <limits.h>
 #include <stdbool.h>
 #include <ctype.h>
-#include <pthread.h>
-
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -45,18 +44,7 @@ struct file
 struct file files[100];
 int fileCount = 0;
 
-//fonction gestion droit
-void ajouteperms(char *fichier, int addid);
-void supprimeperms(char *fichier, int suppid);
-int menuperms();
-int menupermsetendue();
-int menu(char *fichier);
-void ajoutepermsetendue(char *fichier, int addidetendue);
-void supprimepermsetendue(char *fichier, int suppidetendue);
-void proprietefile(char *fichier);
-int gestiondroit();
-
-char **getPathsFromFile();
+char** getPathsFromFile();
 void logEvent(const char *event);
 void monitorFileProperties(char **filePaths, int numPaths, FileInfo fileInfos[]);
 FileInfo *scanDirectories(char **filePaths, int numPaths);
@@ -68,55 +56,56 @@ bool fileExists(const char *path);
 void addFile(const char *path);
 void removeFile(const char *path);
 void displayFiles();
-void parseFilePaths(char *filePaths[], int size);
-void onAddButtonClicked(GtkWidget *widget, gpointer data);
-void onRemoveButtonClicked(GtkWidget *widget, gpointer data);
-void update_textview(const gchar *text);
-void onDisplayButtonClicked(GtkWidget *widget, gpointer data);
-void onLogButtonClicked(GtkWidget *widget, gpointer data);
-void *fileMonitoringFunction(void *arg);
-void onLogWindowDestroy(GtkWidget *widget, gpointer data);
 
-GtkWidget *window;
-GtkWidget *addButton;
-GtkWidget *removeButton;
-GtkWidget *displayButton;
-GtkWidget *logButton;
-GtkWidget *textView;
-GtkWidget *logWindow;
-GtkWidget *logTextView = NULL;
+int main()
+{  
+    int choice;
+    char path[MAX_PATH_LENGTH];
+    char **filePaths = getPathsFromFile();
+    int numPaths = 0;
+    while (filePaths[numPaths] != NULL)
+    {
+        numPaths++;
+    }
+    char *fileToWatch[MAX_FILES + 1];
 
-int main(int argc, char *argv[]) {
-    
-    gtk_init(&argc, &argv);
-    window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-    gtk_window_set_title(GTK_WINDOW(window), "File Monitor");
-    gtk_container_set_border_width(GTK_CONTAINER(window), 10);
-    g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
+    do
+    {
+        printf("\nMenu :\n");
+        printf("1. Ajouter un chemin de fichier à surveiller\n");
+        printf("2. Supprimer un chemin du fichier surveillé\n");
+        printf("3. Afficher la liste des fichiers surveillés\n");
+        printf("4. Lancer le monitoring\n");
+        printf("5. Quitter\n");
+        printf("Entrez votre choix : ");
+        scanf("%d", &choice);
 
-    addButton = gtk_button_new_with_label("Ajouter un chemin");
-    g_signal_connect(addButton, "clicked", G_CALLBACK(onAddButtonClicked), NULL);
-
-    removeButton = gtk_button_new_with_label("Supprimer un chemin");
-    g_signal_connect(removeButton, "clicked", G_CALLBACK(onRemoveButtonClicked), NULL);
-
-    displayButton = gtk_button_new_with_label("Afficher les chemins");
-    g_signal_connect(displayButton, "clicked", G_CALLBACK(onDisplayButtonClicked), NULL);
-
-    logButton = gtk_button_new_with_label("Afficher les logs");
-    g_signal_connect(logButton, "clicked", G_CALLBACK(onLogButtonClicked), NULL);
-
-    GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
-    gtk_container_add(GTK_CONTAINER(window), vbox);
-
-    gtk_box_pack_start(GTK_BOX(vbox), addButton, TRUE, TRUE, 0);
-    gtk_box_pack_start(GTK_BOX(vbox), removeButton, TRUE, TRUE, 0);
-    gtk_box_pack_start(GTK_BOX(vbox), displayButton, TRUE, TRUE, 0);
-    gtk_box_pack_start(GTK_BOX(vbox), logButton, TRUE, TRUE, 0);
-
-    gtk_widget_show_all(window);
-
-    gtk_main();
+        switch (choice)
+        {
+        case 1:
+            printf("chemin du fichier à surveiller : ");
+            scanf("%s", path);
+            addFile(path);
+            break;
+        case 2:
+            printf("le chemin du fichier à supprimer : ");
+            scanf("%s", path);
+            removeFile(path);
+            break;
+        case 3:
+            displayFiles();
+            break;
+        case 4:
+            FileInfo *fileInfos = scanDirectories(filePaths, numPaths);
+            monitorFileProperties(filePaths, numPaths, fileInfos);
+            break;
+        case 5:
+            printf("terminé.\n");
+            break;
+        default:
+            printf("Choix invalide. Veuillez entrer un nombre entre 1 et 4.\n");
+        }
+    } while (choice != 4);
 
     return 0;
 }
@@ -666,4 +655,71 @@ void displayFiles()
     }
 
     fclose(fichier);
+}
+
+void monitorFiles()
+{
+    while (1)
+    {
+        FILE *configFile = fopen("./config.txt", "r");
+        if (configFile == NULL)
+        {
+            fprintf(stderr, "Erreur lors de l'ouverture du fichier de configuration\n");
+            exit(1);
+        }
+
+        char line[MAX_PATH_LENGTH];
+        while (fgets(line, sizeof(line), configFile) != NULL)
+        {
+            char *cleanLine = strtok(line, "\r\n");
+            char command[MAX_PATH_LENGTH + 20];
+            sprintf(command, "shasum256 %s", cleanLine);
+
+            FILE *commandOutput = popen(command, "r");
+            if (commandOutput == NULL)
+            {
+                fprintf(stderr, "Erreur lors de l'exécution de la commande shasum256\n");
+                exit(1);
+            }
+
+            char hash[SHA256_DIGEST_LENGTH * 2 + 1];
+            if (fgets(hash, sizeof(hash), commandOutput) != NULL)
+            {
+                char *cleanHash = strtok(hash, " \r\n");
+                char logFileName[MAX_PATH_LENGTH + 5];
+                sprintf(logFileName, "%s.log", cleanLine);
+
+                int logFile = open(logFileName, O_WRONLY | O_CREAT | O_APPEND, 0644);
+                if (logFile == -1)
+                {
+                    fprintf(stderr, "Erreur lors de l'ouverture du fichier log\n");
+                    exit(1);
+                }
+
+                char currentHash[SHA256_DIGEST_LENGTH * 2 + 1];
+                ssize_t bytesRead = read(logFile, currentHash, sizeof(currentHash));
+                if (bytesRead == -1)
+                {
+                    fprintf(stderr, "Erreur lors de la lecture du fichier log\n");
+                    exit(1);
+                }
+
+                if (bytesRead == 0 || strcmp(cleanHash, currentHash) != 0)
+                {
+                    lseek(logFile, 0, SEEK_SET);
+                    write(logFile, cleanHash, strlen(cleanHash));
+                    write(logFile, "\n", 1);
+                    printf("Le fichier %s a été modifié. Un nouveau log a été créé.\n", cleanLine);
+                }
+
+                close(logFile);
+            }
+
+            pclose(commandOutput);
+        }
+
+        fclose(configFile);
+
+        sleep(60); // Wait for 60 seconds before checking again
+    }
 }
