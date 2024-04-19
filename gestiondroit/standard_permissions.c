@@ -104,7 +104,7 @@ void supprimeperms(char *fichier, int suppid){
 	strcpy(copyfichiersupp, fichier);
 
 	printf("\n\nQuelle permissions voulez-vous supprimer a ce fichier ?\n (R) pour Lecture, (W) pour Ecriture, (X) pour Execution\n\n");
-	printf("Exemples:\n'RW' pour ajouter les droits lecture et écriture\n'x' pour ajouter le droit d'exécution\n\n> ");
+	printf("Exemples:\n'RW' pour supprimer les droits lecture et écriture\n'x' pour supprimer le droit d'exécution\n\n> ");
 	scanf("%s", permission);
 
     //printf("%s", permission);

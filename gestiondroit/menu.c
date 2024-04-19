@@ -192,14 +192,13 @@ int menupermsetendue(){
 
 
 int menu(char *fichier){
-	char *choix = malloc(100);
+	char choix[100];
 	int permchoix;
 	int permetenduechoix;
 
 	while (1) {
 
 		printf("\n\n\t\tMENU PRINCIPAL\n");
-		//printf("\nAvant ajouteperms choix: %s", choix);
 		printf("\n\n1. Changer les permissions d'accès standard de ce fichier(Lecture, écriture et éxecution)\n2. Changer les permissions d'accès étendues de ce fichier(SUID, SGID et Sticky BIT)\n3. Quitter le gestionnaire d'accès pour ce fichier\n\nVotre choix > ");
 		
 		scanf("%s2",choix);
@@ -209,8 +208,6 @@ int menu(char *fichier){
 
 			if (permchoix == 11) {					//utilisateur propriétaire
 				ajouteperms(fichier,1);
-				//printf("Après ajouteperms choix: %d", choix[0]);
-				free(choix);
 			} else if (permchoix == 12) {
 				supprimeperms(fichier,1);
 			} else if (permchoix == 21) {			//groupe propriétaire
@@ -239,7 +236,6 @@ int menu(char *fichier){
 				supprimepermsetendue(fichier,6);
 			}
 		} else if (strcmp(choix,"3") == 0) {
-			free(choix);
 			return 0;		
 		} else {
 			printf("\n\t###################################\n\n[ ! ] Veuillez choisir une des options disponibles ci-dessous [ ! ]\n");
