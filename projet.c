@@ -49,6 +49,13 @@ bool fileExists(const char *path);
 void addFile(const char *path);
 void removeFile(const char *path);
 void displayFiles();
+void onAddButtonClicked(GtkWidget *widget, gpointer data);
+void onRemoveButtonClicked(GtkWidget *widget, gpointer data);
+void update_textview(const gchar *text);
+void onDisplayButtonClicked(GtkWidget *widget, gpointer data);
+void onLogButtonClicked(GtkWidget *widget, gpointer data);
+void *fileMonitoringFunction(void *arg);
+void onLogWindowDestroy(GtkWidget *widget, gpointer data);
 
 GtkWidget *window;
 GtkWidget *addButton;
@@ -58,163 +65,6 @@ GtkWidget *logButton;
 GtkWidget *textView;
 GtkWidget *logWindow;
 GtkWidget *logTextView = NULL;
-
-void onAddButtonClicked(GtkWidget *widget, gpointer data)
-{
-    GtkWidget *dialog;
-    dialog = gtk_file_chooser_dialog_new("Ajouter un chemin",
-                                         GTK_WINDOW(window),
-                                         GTK_FILE_CHOOSER_ACTION_OPEN,
-                                         "_Annuler",
-                                         GTK_RESPONSE_CANCEL,
-                                         "_Ajouter",
-                                         GTK_RESPONSE_ACCEPT,
-                                         NULL);
-
-    if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT)
-    {
-        char *filename;
-        filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
-        addFile(filename);
-        g_free(filename);
-    }
-
-    gtk_widget_destroy(dialog);
-}
-
-void onRemoveButtonClicked(GtkWidget *widget, gpointer data)
-{
-    GtkWidget *dialog;
-    dialog = gtk_file_chooser_dialog_new("Supprimer un chemin",
-                                         GTK_WINDOW(window),
-                                         GTK_FILE_CHOOSER_ACTION_OPEN,
-                                         "_Annuler",
-                                         GTK_RESPONSE_CANCEL,
-                                         "_Supprimer",
-                                         GTK_RESPONSE_ACCEPT,
-                                         NULL);
-
-    if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT)
-    {
-        char *filename;
-        filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
-        removeFile(filename);
-        g_free(filename);
-    }
-
-    gtk_widget_destroy(dialog);
-}
-
-void update_textview(const gchar *text)
-{
-    GtkTextBuffer *buffer;
-    GtkTextIter iter;
-
-    buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(textView));
-
-    gtk_text_buffer_get_iter_at_offset(buffer, &iter, -1);
-    gtk_text_buffer_insert(buffer, &iter, text, -1);
-}
-
-void onDisplayButtonClicked(GtkWidget *widget, gpointer data)
-{
-    char **filePaths = getPathsFromFile();
-
-    GtkWidget *dialog;
-    dialog = gtk_dialog_new_with_buttons("Liste des chemins surveillés",
-                                         GTK_WINDOW(window),
-                                         GTK_DIALOG_MODAL,
-                                         "_Fermer",
-                                         GTK_RESPONSE_CLOSE,
-                                         NULL);
-
-    GtkWidget *contentArea = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
-
-    GtkWidget *label = gtk_label_new(NULL);
-
-    char *pathsText = g_strdup("");
-    int i = 0;
-    while (filePaths[i] != NULL)
-    {
-        char *line = g_strdup_printf("%d. %s\n", i + 1, filePaths[i]);
-        pathsText = g_strconcat(pathsText, line, NULL);
-        g_free(line);
-        i++;
-    }
-
-    gtk_label_set_text(GTK_LABEL(label), pathsText);
-    g_free(pathsText);
-
-    gtk_container_add(GTK_CONTAINER(contentArea), label);
-
-    g_strfreev(filePaths);
-
-    gtk_widget_show_all(dialog);
-}
-
-gboolean refreshLog(gpointer data) {
-    if (logTextView == NULL) {
-        return G_RESOURCE_ERROR;
-    }
-
-    FILE *logFile = fopen("file_monitor.log", "r");
-    if (logFile == NULL) {
-        printf("Impossible d'ouvrir le fichier de journalisation.\n");
-        return G_SOURCE_CONTINUE;
-    }
-
-    GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(logTextView));
-    gtk_text_buffer_set_text(buffer, "", -1);
-
-    char line[512];
-    while (fgets(line, sizeof(line), logFile) != NULL) {
-        gtk_text_buffer_insert_at_cursor(buffer, line, -1);
-    }
-    fclose(logFile);
-
-    return G_SOURCE_CONTINUE;
-}
-
-void *fileMonitoringFunction(void *arg) {
-    char **filePaths = getPathsFromFile();
-    int numPaths = 0;
-    while (filePaths[numPaths] != NULL)
-        numPaths++;
-
-    FileInfo *fileInfos = scanDirectories(filePaths, numPaths);
-
-    monitorFileProperties(filePaths, numPaths, fileInfos);
-
-    g_strfreev(filePaths);
-    free(fileInfos);
-
-    return NULL;
-}
-
-void onLogWindowDestroy(GtkWidget *widget, gpointer data) {
-    if (logTextView != NULL) {
-        gtk_widget_destroy(logTextView);
-        logTextView = NULL;
-    }
-}
-
-void onLogButtonClicked(GtkWidget *widget, gpointer data) {
-    logWindow = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-    gtk_window_set_title(GTK_WINDOW(logWindow), "Journal des événements");
-    gtk_container_set_border_width(GTK_CONTAINER(logWindow), 10);
-    
-    g_signal_connect(logWindow, "destroy", G_CALLBACK(onLogWindowDestroy), NULL);
-
-    logTextView = gtk_text_view_new();
-    gtk_text_view_set_editable(GTK_TEXT_VIEW(logTextView), FALSE);
-    gtk_container_add(GTK_CONTAINER(logWindow), logTextView);
-
-    gtk_widget_show_all(logWindow);
-
-    pthread_create(&fileMonitoringThread, NULL, fileMonitoringFunction, NULL);
-
-    g_timeout_add_seconds(LOG_INTERVAL, refreshLog, NULL);
-}
 
 int main(int argc, char *argv[]) {
     
@@ -299,7 +149,7 @@ char** getPathsFromFile()
         exit(1);
     }
     paths = temp;
-    paths[i] = NULL; // Terminer le tableau par un pointeur nul
+    paths[i] = NULL;
 
     return paths;
 }
@@ -739,4 +589,161 @@ void displayFiles()
     }
 
     fclose(fichier);
+}
+
+void onAddButtonClicked(GtkWidget *widget, gpointer data)
+{
+    GtkWidget *dialog;
+    dialog = gtk_file_chooser_dialog_new("Ajouter un chemin",
+                                         GTK_WINDOW(window),
+                                         GTK_FILE_CHOOSER_ACTION_OPEN,
+                                         "_Annuler",
+                                         GTK_RESPONSE_CANCEL,
+                                         "_Ajouter",
+                                         GTK_RESPONSE_ACCEPT,
+                                         NULL);
+
+    if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT)
+    {
+        char *filename;
+        filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
+        addFile(filename);
+        g_free(filename);
+    }
+
+    gtk_widget_destroy(dialog);
+}
+
+void onRemoveButtonClicked(GtkWidget *widget, gpointer data)
+{
+    GtkWidget *dialog;
+    dialog = gtk_file_chooser_dialog_new("Supprimer un chemin",
+                                         GTK_WINDOW(window),
+                                         GTK_FILE_CHOOSER_ACTION_OPEN,
+                                         "_Annuler",
+                                         GTK_RESPONSE_CANCEL,
+                                         "_Supprimer",
+                                         GTK_RESPONSE_ACCEPT,
+                                         NULL);
+
+    if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT)
+    {
+        char *filename;
+        filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
+        removeFile(filename);
+        g_free(filename);
+    }
+
+    gtk_widget_destroy(dialog);
+}
+
+void update_textview(const gchar *text)
+{
+    GtkTextBuffer *buffer;
+    GtkTextIter iter;
+
+    buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(textView));
+
+    gtk_text_buffer_get_iter_at_offset(buffer, &iter, -1);
+    gtk_text_buffer_insert(buffer, &iter, text, -1);
+}
+
+void onDisplayButtonClicked(GtkWidget *widget, gpointer data)
+{
+    char **filePaths = getPathsFromFile();
+
+    GtkWidget *dialog;
+    dialog = gtk_dialog_new_with_buttons("Liste des chemins surveillés",
+                                         GTK_WINDOW(window),
+                                         GTK_DIALOG_MODAL,
+                                         "_Fermer",
+                                         GTK_RESPONSE_CLOSE,
+                                         NULL);
+
+    GtkWidget *contentArea = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+
+    GtkWidget *label = gtk_label_new(NULL);
+
+    char *pathsText = g_strdup("");
+    int i = 0;
+    while (filePaths[i] != NULL)
+    {
+        char *line = g_strdup_printf("%d. %s\n", i + 1, filePaths[i]);
+        pathsText = g_strconcat(pathsText, line, NULL);
+        g_free(line);
+        i++;
+    }
+
+    gtk_label_set_text(GTK_LABEL(label), pathsText);
+    g_free(pathsText);
+
+    gtk_container_add(GTK_CONTAINER(contentArea), label);
+
+    g_strfreev(filePaths);
+
+    gtk_widget_show_all(dialog);
+}
+
+gboolean refreshLog(gpointer data) {
+    if (logTextView == NULL) {
+        return G_RESOURCE_ERROR;
+    }
+
+    FILE *logFile = fopen("file_monitor.log", "r");
+    if (logFile == NULL) {
+        printf("Impossible d'ouvrir le fichier de journalisation.\n");
+        return G_SOURCE_CONTINUE;
+    }
+
+    GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(logTextView));
+    gtk_text_buffer_set_text(buffer, "", -1);
+
+    char line[512];
+    while (fgets(line, sizeof(line), logFile) != NULL) {
+        gtk_text_buffer_insert_at_cursor(buffer, line, -1);
+    }
+    fclose(logFile);
+
+    return G_SOURCE_CONTINUE;
+}
+
+void *fileMonitoringFunction(void *arg) {
+    char **filePaths = getPathsFromFile();
+    int numPaths = 0;
+    while (filePaths[numPaths] != NULL)
+        numPaths++;
+
+    FileInfo *fileInfos = scanDirectories(filePaths, numPaths);
+
+    monitorFileProperties(filePaths, numPaths, fileInfos);
+
+    g_strfreev(filePaths);
+    free(fileInfos);
+
+    return NULL;
+}
+
+void onLogWindowDestroy(GtkWidget *widget, gpointer data) {
+    if (logTextView != NULL) {
+        gtk_widget_destroy(logTextView);
+        logTextView = NULL;
+    }
+}
+
+void onLogButtonClicked(GtkWidget *widget, gpointer data) {
+    logWindow = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    gtk_window_set_title(GTK_WINDOW(logWindow), "Journal des événements");
+    gtk_container_set_border_width(GTK_CONTAINER(logWindow), 10);
+    
+    g_signal_connect(logWindow, "destroy", G_CALLBACK(onLogWindowDestroy), NULL);
+
+    logTextView = gtk_text_view_new();
+    gtk_text_view_set_editable(GTK_TEXT_VIEW(logTextView), FALSE);
+    gtk_container_add(GTK_CONTAINER(logWindow), logTextView);
+
+    gtk_widget_show_all(logWindow);
+
+    pthread_create(&fileMonitoringThread, NULL, fileMonitoringFunction, NULL);
+
+    g_timeout_add_seconds(LOG_INTERVAL, refreshLog, NULL);
 }
