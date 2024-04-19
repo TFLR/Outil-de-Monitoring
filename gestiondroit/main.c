@@ -5,7 +5,7 @@ int gestiondroit(){
 	char nomfichier2[100];	// Pour éviter que la fonction proprietefile() interfere avec le chemin absolue a cause de la fonction dirname() 
 	char nomfichier3[100];	// Entrée manuelle
 
-	FILE* fichier_config = fopen("./config.txt", "r"); // Ouvre le fichier "config.txt" en lecture
+	FILE* fichier_config = fopen("../config.txt", "r"); // Ouvre le fichier "config.txt" en lecture
 	printf("Lecture du fichier de configuration...\n\n");
 
 	while (1){
