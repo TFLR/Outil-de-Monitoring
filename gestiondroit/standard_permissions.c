@@ -174,3 +174,4 @@ void supprimeperms(char *fichier, int suppid){
 	}
 	return;
 }
+

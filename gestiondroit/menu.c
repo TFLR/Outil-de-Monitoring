@@ -247,3 +247,4 @@ int menu(char *fichier){
 	}
 	return 0;
 }
+

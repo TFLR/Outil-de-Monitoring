@@ -1,6 +1,6 @@
 #include "file_permissions.h"
 
-int main(){
+int gestiondroit(){
 	char nomfichier[100];
 	char nomfichier2[100];	// Pour éviter que la fonction proprietefile() interfere avec le chemin absolue a cause de la fonction dirname() 
 	char nomfichier3[100];	// Entrée manuelle

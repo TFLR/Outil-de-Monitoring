@@ -1,6 +1,5 @@
 #include "file_permissions.h"
 
-
 void ajoutepermsetendue(char *fichier, int addidetendue) {
 
 	struct stat infofichier;
@@ -53,3 +52,4 @@ void supprimepermsetendue(char *fichier, int addidetendue) {
 		free(copyfichier);
 		return;
 }
+
