@@ -5,7 +5,7 @@ int gestiondroit(){
 	char nomfichier2[100];	// Pour éviter que la fonction proprietefile() interfere avec le chemin absolue a cause de la fonction dirname() 
 	char nomfichier3[100];	// Entrée manuelle
 
-	FILE* fichier_config = fopen("../config.txt", "r"); // Ouvre le fichier "config.txt" en lecture
+	FILE* fichier_config = fopen("./config.txt", "r"); // Ouvre le fichier "config.txt" en lecture
 	printf("Lecture du fichier de configuration...\n\n");
 
 	while (1){
@@ -62,13 +62,7 @@ int gestiondroit(){
         while(1){
 
         	printf("> ");
-        	fgets(reponse, sizeof(reponse), stdin);  // Evite le segmentation fault
-    		reponse[strcspn(reponse, "\n")] = '\0';  // Supprimez le caractère de nouvelle ligne (\n) lu par fgets
-
-    		// Vider le tampon (si un utilisateur envoie un long input seul le 1er caractère est pris en compte)
-			int c;
-			while ((c = getchar()) != '\n' && c != EOF) {}
-        	//scanf(" %s", reponse);
+        	scanf(" %s", reponse);
 
 	        if ((strcmp(reponse, "n") == 0) || (strcmp(reponse, "N") == 0)) {
 	        	printf("\nAu revoir !\n");
@@ -86,7 +80,6 @@ int gestiondroit(){
 
 		if (access(nomfichier3, F_OK) != -1) {
 
-        	printf("\n[ ! ] Le fichier ou répertoire existe. [ ! ]\n");
         	strcpy(nomfichier2,nomfichier3);
 
 			//affiche les informations du fichier
@@ -95,13 +88,8 @@ int gestiondroit(){
 			menu(nomfichier3);
     	} else {
     		printf("\n[ ! ] Le fichier ou répertoire saisie n'existe pas [ ! ]\n");
-    	}
-    	
-        
-		// nettoie le terminal de tout outputs / inputs
-		//system("clear");	
+    	}    	
 	}
 	fclose(fichier_config);
-	
 	return 0;
 }
