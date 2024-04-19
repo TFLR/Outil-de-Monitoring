@@ -11,6 +11,13 @@
 #include <limits.h>
 #include <stdbool.h>
 #include <ctype.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <openssl/sha.h>
+
 
 #define LOG_INTERVAL 1
 #define MAX_FILES 1000
@@ -589,4 +596,71 @@ void displayFiles()
     }
 
     fclose(fichier);
+}
+
+void monitorFiles()
+{
+    while (1)
+    {
+        FILE *configFile = fopen("./config.txt", "r");
+        if (configFile == NULL)
+        {
+            fprintf(stderr, "Erreur lors de l'ouverture du fichier de configuration\n");
+            exit(1);
+        }
+
+        char line[MAX_PATH_LENGTH];
+        while (fgets(line, sizeof(line), configFile) != NULL)
+        {
+            char *cleanLine = strtok(line, "\r\n");
+            char command[MAX_PATH_LENGTH + 20];
+            sprintf(command, "shasum256 %s", cleanLine);
+
+            FILE *commandOutput = popen(command, "r");
+            if (commandOutput == NULL)
+            {
+                fprintf(stderr, "Erreur lors de l'exécution de la commande shasum256\n");
+                exit(1);
+            }
+
+            char hash[SHA256_DIGEST_LENGTH * 2 + 1];
+            if (fgets(hash, sizeof(hash), commandOutput) != NULL)
+            {
+                char *cleanHash = strtok(hash, " \r\n");
+                char logFileName[MAX_PATH_LENGTH + 5];
+                sprintf(logFileName, "%s.log", cleanLine);
+
+                int logFile = open(logFileName, O_WRONLY | O_CREAT | O_APPEND, 0644);
+                if (logFile == -1)
+                {
+                    fprintf(stderr, "Erreur lors de l'ouverture du fichier log\n");
+                    exit(1);
+                }
+
+                char currentHash[SHA256_DIGEST_LENGTH * 2 + 1];
+                ssize_t bytesRead = read(logFile, currentHash, sizeof(currentHash));
+                if (bytesRead == -1)
+                {
+                    fprintf(stderr, "Erreur lors de la lecture du fichier log\n");
+                    exit(1);
+                }
+
+                if (bytesRead == 0 || strcmp(cleanHash, currentHash) != 0)
+                {
+                    lseek(logFile, 0, SEEK_SET);
+                    write(logFile, cleanHash, strlen(cleanHash));
+                    write(logFile, "\n", 1);
+                    printf("Le fichier %s a été modifié. Un nouveau log a été créé.\n", cleanLine);
+                }
+
+                close(logFile);
+            }
+
+            pclose(commandOutput);
+        }
+
+        fclose(configFile);
+
+        sleep(60); // Wait for 60 seconds before checking again
+    }
 }
