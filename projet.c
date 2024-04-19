@@ -14,6 +14,7 @@
 #include <ctype.h>
 #include <pthread.h>
 
+
 #define LOG_INTERVAL 1
 #define MAX_FILES 1000
 #define MAX_PATH_LENGTH 100
@@ -319,18 +320,17 @@ FileInfo *scanDirectories(char **filePaths, int numPaths)
                     exit(EXIT_FAILURE);
                 }
 
-                // printf("Scanning directory: %s\n", filePaths[i]); // Affiche le répertoire en cours de numérisation
-
                 struct dirent *entry;
                 while ((entry = readdir(dir)) != NULL)
                 {
-
                     // Ignorer les entrées spéciales "." et ".."
                     if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
                         continue;
 
                     char fullPath[MAX_PATH_LENGTH];
-                    snprintf(fullPath, sizeof(fullPath), "%s/%s", filePaths[i], entry->d_name);
+                    strncpy(fullPath, filePaths[i], sizeof(fullPath));
+                    strncat(fullPath, "/", sizeof(fullPath) - strlen(fullPath) - 1);
+                    strncat(fullPath, entry->d_name, sizeof(fullPath) - strlen(fullPath) - 1);
 
                     struct stat fileStat;
                     if (stat(fullPath, &fileStat) == -1)
@@ -364,9 +364,6 @@ FileInfo *scanDirectories(char **filePaths, int numPaths)
                 fileInfo.filename[sizeof(fileInfo.filename) - 1] = '\0';
                 fileInfo.permissions = st.st_mode;
 
-                // Affiche le chemin complet du fichier et ses permissions
-                printf("File: %s, Permissions: %o\n", fileInfo.filename, fileInfo.permissions);
-
                 fileInfos[numFiles++] = fileInfo;
             }
             else
@@ -383,7 +380,6 @@ FileInfo *scanDirectories(char **filePaths, int numPaths)
 
     return fileInfos;
 }
-
 mode_t compareFilePermissions(const char *filename, mode_t previousPermissions)
 {
     struct stat fileStat;
@@ -476,7 +472,9 @@ void extractFilesToWatch(char **filePaths, int numPaths, char *fileToWatch[])
 
                     // Construire le chemin complet du fichier à surveiller
                     char fullPath[MAX_PATH_LENGTH];
-                    snprintf(fullPath, sizeof(fullPath), "%s/%s", filePaths[i], entry->d_name);
+                    strncpy(fullPath, filePaths[i], MAX_PATH_LENGTH);
+                    strncat(fullPath, "/", MAX_PATH_LENGTH - strlen(fullPath) - 1);
+                    strncat(fullPath, entry->d_name, MAX_PATH_LENGTH - strlen(fullPath) - 1);
 
                     // Ajouter le fichier à surveiller à la liste
                     fileToWatch[fileToWatchIndex++] = strdup(fullPath);
@@ -657,19 +655,33 @@ void onAddButtonClicked(GtkWidget *widget, gpointer data)
     GtkWidget *dialog;
     dialog = gtk_file_chooser_dialog_new("Ajouter un chemin",
                                          GTK_WINDOW(window),
-                                         GTK_FILE_CHOOSER_ACTION_OPEN,
+                                         GTK_FILE_CHOOSER_ACTION_OPEN, // Action principale pour sélectionner des fichiers
                                          "_Annuler",
                                          GTK_RESPONSE_CANCEL,
                                          "_Ajouter",
                                          GTK_RESPONSE_ACCEPT,
                                          NULL);
 
+    // Ajouter l'action pour sélectionner des dossiers
+    gtk_file_chooser_set_action(GTK_FILE_CHOOSER(dialog), GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER);
+
+    // Permettre la sélection multiple
+    gtk_file_chooser_set_select_multiple(GTK_FILE_CHOOSER(dialog), TRUE);
+
     if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT)
     {
-        char *filename;
-        filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
-        addFile(filename);
-        g_free(filename);
+        GSList *filenames;
+        filenames = gtk_file_chooser_get_filenames(GTK_FILE_CHOOSER(dialog)); // Utiliser gtk_file_chooser_get_filenames pour obtenir les chemins des fichiers et dossiers sélectionnés
+        
+        // Parcourir la liste des chemins et ajouter chaque élément avec addFile
+        for (GSList *node = filenames; node != NULL; node = g_slist_next(node))
+        {
+            char *filename = node->data;
+            addFile(filename);
+            g_free(filename);
+        }
+        
+        g_slist_free(filenames);
     }
 
     gtk_widget_destroy(dialog);
@@ -718,14 +730,11 @@ void onDisplayButtonClicked(GtkWidget *widget, gpointer data)
     char **filePaths = getPathsFromFile();
 
     GtkWidget *dialog;
-    dialog = gtk_dialog_new_with_buttons("Liste des chemins surveillés",
-                                         GTK_WINDOW(window),
-                                         GTK_DIALOG_MODAL,
-                                         NULL);
+    dialog = gtk_dialog_new();
 
     g_signal_connect(dialog, "response", G_CALLBACK(on_dialog_response), NULL);
     gtk_dialog_add_button(GTK_DIALOG(dialog), "Fermer", GTK_RESPONSE_CLOSE);
-    
+
     GtkWidget *contentArea = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
 
     GtkWidget *label = gtk_label_new(NULL);
