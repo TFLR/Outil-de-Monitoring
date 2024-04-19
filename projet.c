@@ -1,72 +1,61 @@
+#include <gtk/gtk.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
-#include <ctype.h>
 
 #define MAX_PATH_LENGTH 100
-#define configFile "./config.txt"
 
-struct file
-{
+struct file {
     char path[MAX_PATH_LENGTH];
 };
 
 struct file files[100];
 int fileCount = 0;
 
-bool fileExists(const char *path)
-{
+bool fileExists(const char *path) {
     FILE *file = fopen(path, "r");
-    if (file != NULL)
-    {
+    if (file != NULL) {
         fclose(file);
-        // printf("yes");
         return true;
     }
-    // printf("no");
     return false;
 }
 
-void addFile(const char *path)
-{
-    if (!fileExists(path))
-    {
-        printf("Le fichier n'existe pas.\n");
-        return;
+void write_to_file(const char *filename, const char *text) {
+    FILE *file = fopen(filename, "a");
+    if (file != NULL) {
+        fputs(text, file);
+        fclose(file);
+    } else {
+        g_print("Impossible d'écrire dans le fichier.\n");
     }
-
-    FILE *fichier = fopen(configFile, "a");
-    if (fichier == NULL)
-    {
-        fprintf(stderr, "Erreur lors de l'ouverture du fichier de configuration\n");
-        exit(1);
-    }
-    
-    fseek(fichier, 0, SEEK_END);
-    if (ftell(fichier) != 0)
-    {
-        fprintf(fichier, "\n");
-    }
-
-    strcpy(files[fileCount].path, path);
-    fileCount++;
-    fprintf(fichier, "%s", path);
-
-    fclose(fichier);
-    printf("Fichier ajouté avec succès !\n");
 }
 
-void removeFile(const char *path)
-{
-    FILE *fichier = fopen(configFile, "r");
+void load_file(GtkWidget *text_view, const char *filename) {
+    FILE *file = fopen(filename, "r");
+    if (file != NULL) {
+        GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(text_view));
+        char text[1000];
+        gtk_text_buffer_set_text(buffer, "", -1);
+        while (fgets(text, sizeof(text), file) != NULL) {
+            gtk_text_buffer_insert_at_cursor(buffer, text, -1);
+        }
+        fclose(file);
+    } else {
+        g_print("Impossible d'ouvrir le fichier.\n");
+    }
+}
+
+void delete_from_file(const char *filename, const char *text_to_delete) {
+    FILE *fichier = fopen(filename, "r");
     if (fichier == NULL)
     {
         fprintf(stderr, "Erreur lors de l'ouverture du fichier de configuration\n");
         exit(1);
     }
-
-    FILE *tempFile = fopen("./temp.txt", "w");
+    char temp_filename[] = "temp.txt";
+    FILE *tempFile = fopen(temp_filename, "w");
     if (tempFile == NULL)
     {
         fprintf(stderr, "Erreur lors de l'ouverture du fichier temporaire\n");
@@ -79,7 +68,7 @@ void removeFile(const char *path)
     {
         char *cleanLine = strtok(line, "\r\n");
 
-        if (strcmp(cleanLine, path) != 0)
+        if (strcmp(cleanLine, text_to_delete) != 0)
         {
             fputs(line, tempFile);
             fputs("\n", tempFile);
@@ -95,8 +84,8 @@ void removeFile(const char *path)
 
     if (removed)
     {
-        remove(configFile);
-        rename("./temp.txt", configFile);
+        remove(filename);
+        rename(temp_filename,filename);
         printf("Fichier supprimé avec succès !\n");
     }
     else
@@ -106,124 +95,64 @@ void removeFile(const char *path)
     }
 }
 
-char** getPathsFromFile()
-{
-    FILE* file = fopen(configFile, "r");
-    if (file == NULL)
-    {
-        fprintf(stderr, "Erreur lors de l'ouverture du fichier %s\n", configFile);
-        exit(1);
-    }
+void on_add_content_clicked(GtkWidget *widget, gpointer data) {
+    GtkWidget *text_view = GTK_WIDGET(data);
+    GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(text_view));
+    GtkTextIter start, end;
+    gtk_text_buffer_get_bounds(buffer, &start, &end);
+    gchar *text = gtk_text_buffer_get_text(buffer, &start, &end, FALSE);
 
-    char** paths = NULL;
-    char line[MAX_PATH_LENGTH];
-    int i = 0;
-    while (fgets(line, sizeof(line), file) != NULL)
-    {
-        // Supprimer les caractères de fin de ligne
-        char* cleanLine = strtok(line, "\r\n");
-        // Ignorer les lignes vides ou non valides
-        if (cleanLine == NULL || cleanLine[0] == '\0')
-            continue;
+    write_to_file("liste.txt", text);
+    write_to_file("liste.txt", "\n");
 
-        // Réallouer de la mémoire pour les pointeurs de chaînes de caractères
-        char** temp = realloc(paths, (i + 1) * sizeof(char*));
-        if (temp == NULL)
-        {
-            fprintf(stderr, "Erreur lors de l'allocation de mémoire\n");
-            exit(1);
-        }
-        paths = temp;
-
-        // Allouer de la mémoire pour la nouvelle chaîne et la copier
-        paths[i] = strdup(cleanLine);
-        if (paths[i] == NULL)
-        {
-            fprintf(stderr, "Erreur lors de l'allocation de mémoire\n");
-            exit(1);
-        }
-        i++;
-    }
-    fclose(file);
-
-    // Terminer le tableau par un pointeur nul
-    char** temp = realloc(paths, (i + 1) * sizeof(char*));
-    if (temp == NULL)
-    {
-        fprintf(stderr, "Erreur lors de l'allocation de mémoire\n");
-        exit(1);
-    }
-    paths = temp;
-    paths[i] = NULL; // Terminer le tableau par un pointeur nul
-
-    return paths;
+    g_free(text);
 }
 
-void displayFiles()
-{
-    printf("Liste des fichiers surveillés :\n");
+void on_remove_content_clicked(GtkWidget *widget, gpointer data) {
+    GtkWidget *text_view = GTK_WIDGET(data);
+    GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(text_view));
+    GtkTextIter start, end;
+    gtk_text_buffer_get_bounds(buffer, &start, &end);
+    gchar *text = gtk_text_buffer_get_text(buffer, &start, &end, FALSE);
 
-    FILE *fichier = fopen(configFile, "r");
-    if (fichier == NULL)
-    {
-        fprintf(stderr, "Erreur lors de l'ouverture du fichier de configuration\n");
-        exit(1);
-    }
+    delete_from_file("liste.txt", text);
 
-    char line[MAX_PATH_LENGTH];
-    int fileNumber = 1;
-    while (fgets(line, sizeof(line), fichier) != NULL)
-    {
-        printf("%d. %s", fileNumber, line);
-        fileNumber++;
-    }
-
-    fclose(fichier);
+    g_free(text);
 }
 
-int main()
-{
-    char** paths = getPathsFromFile();
-    for (int i = 0; paths[i] != NULL; i++)
-    {
-        printf("%s\n", paths[i]);
-    }
+int main(int argc, char *argv[]) {
+    GtkWidget *window;
+    GtkWidget *text_view;
+    GtkWidget *add_button;
+    GtkWidget *remove_button;
+    GtkWidget *hbox;
 
-    int choice;
-    char path[MAX_PATH_LENGTH];
-    do
-    {
-        printf("\nMenu :\n");
-        printf("1. Ajouter un chemin de fichier à surveiller\n");
-        printf("2. Supprimer un chemin du fichier surveillé\n");
-        printf("3. Afficher la liste des fichiers surveillés\n");
-        printf("4. Quitter\n");
-        printf("Entrez votre choix : ");
-        scanf("%d", &choice);
+    gtk_init(&argc, &argv);
 
-        switch (choice)
-        {
-        case 1:
-            printf("chemin du fichier à surveiller : ");
-            scanf("%s", path);
-            addFile(path);
-            break;
-        case 2:
-            printf("le chemin du fichier à supprimer : ");
-            scanf("%s", path);
-            removeFile(path);
-            break;
-        case 3:
-            displayFiles();
-            break;
-        case 4:
-            printf("terminé.\n");
-            break;
-        default:
-            printf("Choix invalide. Veuillez entrer un nombre entre 1 et 4.\n");
-        }
-    } while (choice != 4);
+    window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    gtk_window_set_title(GTK_WINDOW(window), "Gestionnaire de fichiers");
+    gtk_window_set_default_size(GTK_WINDOW(window), 400, 50);
+    g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
+
+    text_view = gtk_text_view_new();
+    gtk_widget_set_size_request(text_view, 200, -1); // Fixer la largeur de la zone de texte
+
+    add_button = gtk_button_new_with_label("Ajouter");
+    remove_button = gtk_button_new_with_label("Supprimer");
+
+    g_signal_connect(add_button, "clicked", G_CALLBACK(on_add_content_clicked), text_view);
+    g_signal_connect(remove_button, "clicked", G_CALLBACK(on_remove_content_clicked), text_view);
+
+    hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+    gtk_box_pack_start(GTK_BOX(hbox), text_view, TRUE, TRUE, 0); // La zone de texte utilise l'espace disponible
+    gtk_box_pack_start(GTK_BOX(hbox), add_button, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(hbox), remove_button, FALSE, FALSE, 0);
+
+    gtk_container_add(GTK_CONTAINER(window), hbox);
+
+    gtk_widget_show_all(window);
+
+    gtk_main();
 
     return 0;
 }
-//
