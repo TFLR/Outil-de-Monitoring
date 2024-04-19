@@ -38,7 +38,6 @@ struct file files[100];
 int fileCount = 0;
 
 char **getPathsFromFile();
-char **getPathsFromFile();
 void logEvent(const char *event);
 void monitorFileProperties(char **filePaths, int numPaths, FileInfo fileInfos[]);
 FileInfo *scanDirectories(char **filePaths, int numPaths);
@@ -796,12 +795,20 @@ void onLogButtonClicked(GtkWidget *widget, gpointer data) {
     logWindow = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(logWindow), "Journal des événements");
     gtk_container_set_border_width(GTK_CONTAINER(logWindow), 10);
+    gtk_window_resize(GTK_WINDOW(logWindow), 1300, 300);
     
     g_signal_connect(logWindow, "destroy", G_CALLBACK(onLogWindowDestroy), NULL);
 
+    GtkWidget *scrolledWindow = gtk_scrolled_window_new(NULL, NULL);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolledWindow),
+                                   GTK_POLICY_ALWAYS,
+                                   GTK_POLICY_ALWAYS); 
+
+    gtk_container_add(GTK_CONTAINER(logWindow), scrolledWindow);
+
     logTextView = gtk_text_view_new();
     gtk_text_view_set_editable(GTK_TEXT_VIEW(logTextView), FALSE);
-    gtk_container_add(GTK_CONTAINER(logWindow), logTextView);
+    gtk_container_add(GTK_CONTAINER(scrolledWindow), logTextView);
 
     gtk_widget_show_all(logWindow);
 
