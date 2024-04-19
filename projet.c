@@ -38,6 +38,17 @@ struct file
 struct file files[100];
 int fileCount = 0;
 
+//fonction gestion droit
+void ajouteperms(char *fichier, int addid);
+void supprimeperms(char *fichier, int suppid);
+int menuperms();
+int menupermsetendue();
+int menu(char *fichier);
+void ajoutepermsetendue(char *fichier, int addidetendue);
+void supprimepermsetendue(char *fichier, int suppidetendue);
+void proprietefile(char *fichier);
+int gestiondroit();
+
 char **getPathsFromFile();
 void logEvent(const char *event);
 void monitorFileProperties(char **filePaths, int numPaths, FileInfo fileInfos[]);
