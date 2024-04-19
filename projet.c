@@ -17,7 +17,6 @@
 #define MAX_PATH_LENGTH 100
 #define configFile "./config.txt"
 
-
 time_t lastLogTime = 0;
 
 typedef struct
@@ -34,7 +33,7 @@ struct file
 struct file files[100];
 int fileCount = 0;
 
-char** getPathsFromFile();
+char **getPathsFromFile();
 void logEvent(const char *event);
 void monitorFileProperties(char **filePaths, int numPaths, FileInfo fileInfos[]);
 FileInfo *scanDirectories(char **filePaths, int numPaths);
@@ -46,9 +45,10 @@ bool fileExists(const char *path);
 void addFile(const char *path);
 void removeFile(const char *path);
 void displayFiles();
+void parseFilePaths(char *filePaths[], int size);
 
 int main()
-{  
+{
     int choice;
     char path[MAX_PATH_LENGTH];
     char **filePaths = getPathsFromFile();
@@ -86,6 +86,7 @@ int main()
             displayFiles();
             break;
         case 4:
+            parseFilePaths(filePaths, numPaths);
             FileInfo *fileInfos = scanDirectories(filePaths, numPaths);
             monitorFileProperties(filePaths, numPaths, fileInfos);
             break;
@@ -100,28 +101,57 @@ int main()
     return 0;
 }
 
-char** getPathsFromFile()
+void parseFilePaths(char *filePaths[], int size) {
+    for (int i = 0; i < size; i++) {
+        char *filePath = filePaths[i];
+        int len = strlen(filePath);
+        
+        // Parcourir les caractères du chemin de fichier en partant de la fin
+        for (int j = len - 1; j >= 0; j--) {
+            if (filePath[j] == '.') { // Si le caractère est un point
+                // Trouver le dernier '/'
+                int k;
+                for (k = j - 1; k >= 0; k--) {
+                    if (filePath[k] == '/') {
+                        break;
+                    }
+                }
+                
+                // Couper la chaîne à partir de ce point
+                if (k >= 0) {
+                    filePath[k] = '\0';
+                }
+                break; // Sortir de la boucle une fois trouvé le point
+            }
+        }
+        
+        // printf("Processed filePath: %s\n", filePath);
+    }
+
+}
+
+char **getPathsFromFile()
 {
-    FILE* file = fopen(configFile, "r");
+    FILE *file = fopen(configFile, "r");
     if (file == NULL)
     {
         fprintf(stderr, "Erreur lors de l'ouverture du fichier %s\n", configFile);
         exit(1);
     }
 
-    char** paths = NULL;
+    char **paths = NULL;
     char line[MAX_PATH_LENGTH];
     int i = 0;
     while (fgets(line, sizeof(line), file) != NULL)
     {
         // Supprimer les caractères de fin de ligne
-        char* cleanLine = strtok(line, "\r\n");
+        char *cleanLine = strtok(line, "\r\n");
         // Ignorer les lignes vides ou non valides
         if (cleanLine == NULL || cleanLine[0] == '\0')
             continue;
 
         // Réallouer de la mémoire pour les pointeurs de chaînes de caractères
-        char** temp = realloc(paths, (i + 1) * sizeof(char*));
+        char **temp = realloc(paths, (i + 1) * sizeof(char *));
         if (temp == NULL)
         {
             fprintf(stderr, "Erreur lors de l'allocation de mémoire\n");
@@ -140,7 +170,7 @@ char** getPathsFromFile()
     }
     fclose(file);
 
-    char** temp = realloc(paths, (i + 1) * sizeof(char*));
+    char **temp = realloc(paths, (i + 1) * sizeof(char *));
     if (temp == NULL)
     {
         fprintf(stderr, "Erreur lors de l'allocation de mémoire\n");
@@ -192,10 +222,11 @@ void monitorFileProperties(char **filePaths, int numPaths, FileInfo fileInfos[])
 
             if (event->mask & IN_ATTRIB)
             {
-                printf("ALERTE");
+                // printf("ALERTE");
                 int i = 0;
                 struct stat fileStat;
                 char fullPath[MAX_FILES];
+
                 strcpy(fullPath, filePaths[0]);
                 sprintf(fullPath + strlen(filePaths[0]), "/%s", event->name);
 
@@ -204,7 +235,7 @@ void monitorFileProperties(char **filePaths, int numPaths, FileInfo fileInfos[])
                     i += 1;
 
                     strcpy(fullPath, filePaths[i]);
-
+                    // printf("%s\n", strcpy(fullPath, filePaths[i]));
                     sprintf(fullPath + strlen(filePaths[i]), "/%s", event->name);
 
                     if (stat(fullPath, &fileStat) == 0)
@@ -227,7 +258,7 @@ void monitorFileProperties(char **filePaths, int numPaths, FileInfo fileInfos[])
 
                 if (stat(fullPath, &fileStat) == -1)
                 {
-                    perror("stat");
+                    perror("stat1");
                     exit(EXIT_FAILURE);
                 }
             }
@@ -265,7 +296,7 @@ void logEvent(const char *event)
 
 FileInfo *scanDirectories(char **filePaths, int numPaths)
 {
-    FileInfo* fileInfos = malloc(MAX_FILES * sizeof(FileInfo));
+    FileInfo *fileInfos = malloc(MAX_FILES * sizeof(FileInfo));
     if (fileInfos == NULL)
     {
         fprintf(stderr, "Erreur lors de l'allocation de mémoire\n");
@@ -275,47 +306,78 @@ FileInfo *scanDirectories(char **filePaths, int numPaths)
 
     for (int i = 0; i < numPaths; ++i)
     {
-        DIR *dir = opendir(filePaths[i]);
-        if (dir == NULL)
+        struct stat st;
+        if (stat(filePaths[i], &st) == 0)
         {
-            perror("opendir");
+            if (S_ISDIR(st.st_mode))
+            {
+                DIR *dir = opendir(filePaths[i]);
+                if (dir == NULL)
+                {
+                    perror("opendir");
+                    exit(EXIT_FAILURE);
+                }
+
+                // printf("Scanning directory: %s\n", filePaths[i]); // Affiche le répertoire en cours de numérisation
+
+                struct dirent *entry;
+                while ((entry = readdir(dir)) != NULL)
+                {
+
+                    // Ignorer les entrées spéciales "." et ".."
+                    if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+                        continue;
+
+                    char fullPath[MAX_PATH_LENGTH];
+                    snprintf(fullPath, sizeof(fullPath), "%s/%s", filePaths[i], entry->d_name);
+
+                    struct stat fileStat;
+                    if (stat(fullPath, &fileStat) == -1)
+                    {
+                        perror("stat2");
+                        exit(EXIT_FAILURE);
+                    }
+
+                    FileInfo fileInfo;
+                    strncpy(fileInfo.filename, fullPath, sizeof(fileInfo.filename) - 1);
+                    fileInfo.filename[sizeof(fileInfo.filename) - 1] = '\0';
+                    fileInfo.permissions = fileStat.st_mode;
+
+                    // Vérifier si le nombre de fichiers dépasse MAX_FILES
+                    if (numFiles >= MAX_FILES)
+                    {
+                        fprintf(stderr, "Nombre maximal de fichiers atteint. Ignorer les fichiers supplémentaires.\n");
+                        break;
+                    }
+
+                    // Ajouter le fichier à la liste des FileInfo
+                    fileInfos[numFiles++] = fileInfo;
+                }
+
+                closedir(dir);
+            }
+            else if (S_ISREG(st.st_mode))
+            {
+                FileInfo fileInfo;
+                strncpy(fileInfo.filename, filePaths[i], sizeof(fileInfo.filename) - 1);
+                fileInfo.filename[sizeof(fileInfo.filename) - 1] = '\0';
+                fileInfo.permissions = st.st_mode;
+
+                // Affiche le chemin complet du fichier et ses permissions
+                printf("File: %s, Permissions: %o\n", fileInfo.filename, fileInfo.permissions);
+
+                fileInfos[numFiles++] = fileInfo;
+            }
+            else
+            {
+                fprintf(stderr, "%s n'est ni un répertoire ni un fichier régulier.\n", filePaths[i]);
+            }
+        }
+        else
+        {
+            perror("stat3");
             exit(EXIT_FAILURE);
         }
-
-        struct dirent *entry;
-        while ((entry = readdir(dir)) != NULL)
-        {
-            // Ignorer les entrées spéciales "." et ".."
-            if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
-                continue;
-
-            char fullPath[MAX_PATH_LENGTH];
-            snprintf(fullPath, sizeof(fullPath), "%s/%s", filePaths[i], entry->d_name);
-
-            struct stat fileStat;
-            if (stat(fullPath, &fileStat) == -1)
-            {
-                perror("stat");
-                exit(EXIT_FAILURE);
-            }
-
-            FileInfo fileInfo;
-            strncpy(fileInfo.filename, fullPath, sizeof(fileInfo.filename) - 1);
-            fileInfo.filename[sizeof(fileInfo.filename) - 1] = '\0';
-            fileInfo.permissions = fileStat.st_mode;
-
-            // Vérifier si le nombre de fichiers dépasse MAX_FILES
-            if (numFiles >= MAX_FILES)
-            {
-                fprintf(stderr, "Nombre maximal de fichiers atteint. Ignorer les fichiers supplémentaires.\n");
-                break;
-            }
-
-            // Ajouter le fichier à la liste des FileInfo
-            fileInfos[numFiles++] = fileInfo;
-        }
-
-        closedir(dir);
     }
 
     return fileInfos;
@@ -489,7 +551,7 @@ void addFile(const char *path)
 
     // Déplacer le curseur à la fin du fichier
     fseek(fichier, 0, SEEK_END);
-    
+
     // Vérifier si le fichier est vide ou si la dernière ligne est vide
     bool isEmptyFile = (ftell(fichier) == 0);
     if (!isEmptyFile)
