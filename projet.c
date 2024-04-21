@@ -14,7 +14,7 @@
 #include <ctype.h>
 #include <pthread.h>
 #include <libgen.h>
-#include<pwd.h>
+#include <pwd.h>
 
 #define LOG_INTERVAL 1
 #define MAX_FILES 1000
