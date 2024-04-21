@@ -1,6 +1,6 @@
 #include "file_permissions.h"
 
-void proprietefile(char *fichier) {
+int proprietefile(char *fichier) {
 
 	char *file = basename(fichier);			//recupere le nom du fichier
 	char *repertoire = dirname(fichier);		//recupere le repertoire du fichier
@@ -18,6 +18,10 @@ void proprietefile(char *fichier) {
 	struct stat info;
 	stat(infofichier, &info);
 	struct passwd *userinfo = getpwuid(info.st_uid);
+
+	if (strcmp(repertoire,"/") == 0) {
+		return 1;
+	}
 
 	printf("\n\n########## Informations actuelles du fichier ##########\n\n");
 	printf("Dossier : %s\n", repertoire);
@@ -177,5 +181,6 @@ void proprietefile(char *fichier) {
 		printf("Pas de permissions\n\n\n\n");
 	}
 	file = NULL;			// reinitialise ces variables
-    repertoire = NULL; 
+    repertoire = NULL;
+    return 0;
 }

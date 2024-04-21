@@ -139,6 +139,9 @@ int main(int argc, char *argv[]) {
             displayFiles();
             break;
         case 4:
+            //parseFilePaths(filePaths, numPaths);
+            //FileInfo *fileInfos = scanDirectories(filePaths, numPaths);
+            //monitorFileProperties(filePaths, numPaths, fileInfos);
             fileMonitoringFunction();
             break;
         case 5:
@@ -281,6 +284,18 @@ char **getPathsFromFile()
 
 void monitorFileProperties(char **filePaths, int numPaths, FileInfo fileInfos[])
 {
+    if (filePaths == NULL || numPaths <= 0) {
+        printf("No file paths provided for monitoring.\n");
+        return;
+    }
+
+    printf("Liste des chemins depuis main() :\n");
+    for (int i = 0; i < numPaths; i++)
+    {
+        printf("%s\n", filePaths[i]);
+    }
+    
+
     int fd = inotify_init();
     if (fd < 0)
     {
@@ -329,7 +344,6 @@ void monitorFileProperties(char **filePaths, int numPaths, FileInfo fileInfos[])
                 while (stat(fullPath, &fileStat) == -1)
                 {
                     i += 1;
-
                     strcpy(fullPath, filePaths[i]);
                     sprintf(fullPath + strlen(filePaths[i]), "/%s", event->name);
 
@@ -905,6 +919,7 @@ void *fileMonitoringFunction() {
     while (filePaths[numPaths] != NULL)
         numPaths++;
 
+    parseFilePaths(filePaths, numPaths);
     FileInfo *fileInfos = scanDirectories(filePaths, numPaths);
 
     monitorFileProperties(filePaths, numPaths, fileInfos);

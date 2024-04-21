@@ -20,6 +20,6 @@ int menupermsetendue();
 int menu(char *fichier);
 void ajoutepermsetendue(char *fichier, int addidetendue);
 void supprimepermsetendue(char *fichier, int suppidetendue);
-void proprietefile(char *fichier);
+int proprietefile(char *fichier);
 
 #endif
