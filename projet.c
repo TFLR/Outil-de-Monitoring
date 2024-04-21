@@ -1,5 +1,4 @@
 #include <gtk/gtk.h>
-#include <gtk/gtk.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,18 +12,16 @@
 #include <limits.h>
 #include <stdbool.h>
 #include <ctype.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <errno.h>
-#include <openssl/sha.h>
-
+#include <pthread.h>
+#include <libgen.h>
+#include<pwd.h>
 
 #define LOG_INTERVAL 1
 #define MAX_FILES 1000
 #define MAX_PATH_LENGTH 100
 #define configFile "./config.txt"
+#define SENSITIVE_YES 1
+#define SENSITIVE_NO 0
 
 time_t lastLogTime = 0;
 
@@ -34,6 +31,7 @@ typedef struct
 {
     char filename[256];
     mode_t permissions;
+    bool sensitive;
 } FileInfo;
 
 struct file
@@ -43,8 +41,20 @@ struct file
 
 struct file files[100];
 int fileCount = 0;
+int numPaths = 0;
 
-char** getPathsFromFile();
+//fonction gestion droit
+void ajouteperms(char *fichier, int addid);
+void supprimeperms(char *fichier, int suppid);
+int menuperms();
+int menupermsetendue();
+int menu(char *fichier);
+void ajoutepermsetendue(char *fichier, int addidetendue);
+void supprimepermsetendue(char *fichier, int suppidetendue);
+void proprietefile(char *fichier);
+int gestiondroit();
+
+char **getPathsFromFile();
 void logEvent(const char *event);
 void monitorFileProperties(char **filePaths, int numPaths, FileInfo fileInfos[]);
 FileInfo *scanDirectories(char **filePaths, int numPaths);
@@ -53,16 +63,18 @@ int getFileIndex(const char *filename, FileInfo fileInfos[], int numFiles);
 void updatePermissions(FileInfo *fileInfo, mode_t newPermissions);
 void extractFilesToWatch(char **filePaths, int numPaths, char *fileToWatch[]);
 bool fileExists(const char *path);
-void addFile(const char *path);
-void removeFile(const char *path);
+void addFile(const char *path, bool sensitive, FileInfo *fileInfos);
+void removeFilePathByIndex(int index);
 void displayFiles();
+void parseFilePaths(char *filePaths[], int size);
 void onAddButtonClicked(GtkWidget *widget, gpointer data);
 void onRemoveButtonClicked(GtkWidget *widget, gpointer data);
 void update_textview(const gchar *text);
 void onDisplayButtonClicked(GtkWidget *widget, gpointer data);
 void onLogButtonClicked(GtkWidget *widget, gpointer data);
-void *fileMonitoringFunction(void *arg);
+void *fileMonitoringFunction();
 void onLogWindowDestroy(GtkWidget *widget, gpointer data);
+void setFileSensitivity(FileInfo *fileInfo, bool sensitive);
 
 GtkWidget *window;
 GtkWidget *addButton;
@@ -74,39 +86,139 @@ GtkWidget *logWindow;
 GtkWidget *logTextView = NULL;
 
 int main(int argc, char *argv[]) {
-    
-    gtk_init(&argc, &argv);
 
-    window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-    gtk_window_set_title(GTK_WINDOW(window), "File Monitor");
-    gtk_container_set_border_width(GTK_CONTAINER(window), 10);
-    g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
+    char path[MAX_PATH_LENGTH];
+    bool sensitive;
+    int intValue;
+    int number;
+    FileInfo fileInfos[MAX_FILES];
+    char **filePaths = getPathsFromFile();
 
-    addButton = gtk_button_new_with_label("Ajouter un chemin");
-    g_signal_connect(addButton, "clicked", G_CALLBACK(onAddButtonClicked), NULL);
+    while (filePaths[numPaths] != NULL)
+    {
+        numPaths++;
+        printf("%d\n", numPaths);
+    }
+    printf("Liste des chemins depuis main() :\n");
+    for (int i = 0; i < numPaths; i++)
+    {
+        printf("%s\n", filePaths[i]);
+    }
+    int choice;
+    do
+    {
+        printf("\nMenu :\n");
+        printf("1. Ajouter un chemin de fichier à surveiller\n");
+        printf("2. Supprimer un chemin du fichier surveillé\n");
+        printf("3. Afficher la liste des fichiers surveillés\n");
+        printf("4. Lancer le monitoring\n");
+        printf("5. Lancer le programme de gestion d'accès\n");
+        printf("6. Interface graphique\n");
+        printf("7. Quitter\n");
+        printf("Entrez votre choix : ");
+        scanf("%d", &choice);
 
-    removeButton = gtk_button_new_with_label("Supprimer un chemin");
-    g_signal_connect(removeButton, "clicked", G_CALLBACK(onRemoveButtonClicked), NULL);
+        switch (choice)
+        {
+        case 1:
+        {
+            printf("Chemin du fichier à surveiller : ");
+            scanf("%s", path);
+            printf("Le fichier est-il sensible ? (1 pour oui, 0 pour non) : ");
+            scanf("%d", &intValue);
+            sensitive = (intValue != 0);
+            addFile(path, sensitive != 0, fileInfos);
+            break;
+        }
+        case 2:
+            printf("le numéro du chemin à supprimer : ");
+            scanf("%d", &number);
+            removeFilePathByIndex(number);
+            break;
+        case 3:
+            displayFiles();
+            break;
+        case 4:
+            fileMonitoringFunction();
+            break;
+        case 5:
+            gestiondroit();
+            break;
+        case 6:
+            gtk_init(&argc, &argv);
+            window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+            gtk_window_set_title(GTK_WINDOW(window), "File Monitor");
+            gtk_container_set_border_width(GTK_CONTAINER(window), 10);
+            g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
 
-    displayButton = gtk_button_new_with_label("Afficher les chemins");
-    g_signal_connect(displayButton, "clicked", G_CALLBACK(onDisplayButtonClicked), NULL);
+            addButton = gtk_button_new_with_label("Ajouter un chemin");
+            FileInfo *fileInfos = scanDirectories(filePaths, numPaths);
+            g_signal_connect(addButton, "clicked", G_CALLBACK(onAddButtonClicked), fileInfos);
 
-    logButton = gtk_button_new_with_label("Afficher les logs");
-    g_signal_connect(logButton, "clicked", G_CALLBACK(onLogButtonClicked), NULL);
+            removeButton = gtk_button_new_with_label("Supprimer un chemin");
+            g_signal_connect(removeButton, "clicked", G_CALLBACK(onRemoveButtonClicked), NULL);
 
-    GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
-    gtk_container_add(GTK_CONTAINER(window), vbox);
+            displayButton = gtk_button_new_with_label("Afficher les chemins");
+            g_signal_connect(displayButton, "clicked", G_CALLBACK(onDisplayButtonClicked), NULL);
 
-    gtk_box_pack_start(GTK_BOX(vbox), addButton, TRUE, TRUE, 0);
-    gtk_box_pack_start(GTK_BOX(vbox), removeButton, TRUE, TRUE, 0);
-    gtk_box_pack_start(GTK_BOX(vbox), displayButton, TRUE, TRUE, 0);
-    gtk_box_pack_start(GTK_BOX(vbox), logButton, TRUE, TRUE, 0);
+            logButton = gtk_button_new_with_label("Afficher les logs");
+            g_signal_connect(logButton, "clicked", G_CALLBACK(onLogButtonClicked), NULL);
 
-    gtk_widget_show_all(window);
+            GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+            gtk_container_add(GTK_CONTAINER(window), vbox);
 
-    gtk_main();
+            gtk_box_pack_start(GTK_BOX(vbox), addButton, TRUE, TRUE, 0);
+            gtk_box_pack_start(GTK_BOX(vbox), removeButton, TRUE, TRUE, 0);
+            gtk_box_pack_start(GTK_BOX(vbox), displayButton, TRUE, TRUE, 0);
+            gtk_box_pack_start(GTK_BOX(vbox), logButton, TRUE, TRUE, 0);
+
+            gtk_widget_show_all(window);
+
+            gtk_main();
+
+            break;
+        case 7:
+            printf("Terminé.\n");
+            break;
+        default:
+            printf("Choix invalide. Veuillez entrer un nombre entre 1 et 6.\n");
+        }
+    } while (choice != 7);
+
+    for (int i = 0; i < numPaths; i++)
+    {
+        free(filePaths[i]);
+    }
+    free(filePaths);
 
     return 0;
+}
+
+void parseFilePaths(char *filePaths[], int size) {
+    for (int i = 0; i < size; i++) {
+        char *filePath = filePaths[i];
+        int len = strlen(filePath);
+        
+        // Parcourir les caractères du chemin de fichier en partant de la fin
+        for (int j = len - 1; j >= 0; j--) {
+            if (filePath[j] == '.') { // Si le caractère est un point
+                // Trouver le dernier '/'
+                int k;
+                for (k = j - 1; k >= 0; k--) {
+                    if (filePath[k] == '/') {
+                        break;
+                    }
+                }
+                
+                // Couper la chaîne à partir de ce point
+                if (k >= 0) {
+                    filePath[k] = '\0';
+                }
+                break; // Sortir de la boucle une fois trouvé le point
+            }
+        }
+    }
+
 }
 
 char **getPathsFromFile()
@@ -125,9 +237,15 @@ char **getPathsFromFile()
     {
         // Supprimer les caractères de fin de ligne
         char *cleanLine = strtok(line, "\r\n");
-        // Ignorer les lignes vides ou non valides
         if (cleanLine == NULL || cleanLine[0] == '\0')
             continue;
+
+        char path[MAX_PATH_LENGTH];
+        if (sscanf(cleanLine, "%s", path) != 1)
+        {
+            fprintf(stderr, "Erreur lors de la lecture du chemin depuis le fichier\n");
+            exit(1);
+        }
 
         // Réallouer de la mémoire pour les pointeurs de chaînes de caractères
         char **temp = realloc(paths, (i + 1) * sizeof(char *));
@@ -139,7 +257,7 @@ char **getPathsFromFile()
         paths = temp;
 
         // Allouer de la mémoire pour la nouvelle chaîne et la copier
-        paths[i] = strdup(cleanLine);
+        paths[i] = strdup(path);
         if (paths[i] == NULL)
         {
             fprintf(stderr, "Erreur lors de l'allocation de mémoire\n");
@@ -201,7 +319,6 @@ void monitorFileProperties(char **filePaths, int numPaths, FileInfo fileInfos[])
 
             if (event->mask & IN_ATTRIB)
             {
-                // printf("ALERTE");
                 int i = 0;
                 struct stat fileStat;
                 char fullPath[MAX_FILES];
@@ -214,7 +331,6 @@ void monitorFileProperties(char **filePaths, int numPaths, FileInfo fileInfos[])
                     i += 1;
 
                     strcpy(fullPath, filePaths[i]);
-                    // printf("%s\n", strcpy(fullPath, filePaths[i]));
                     sprintf(fullPath + strlen(filePaths[i]), "/%s", event->name);
 
                     if (stat(fullPath, &fileStat) == 0)
@@ -279,7 +395,7 @@ FileInfo *scanDirectories(char **filePaths, int numPaths)
     if (fileInfos == NULL)
     {
         fprintf(stderr, "Erreur lors de l'allocation de mémoire\n");
-        exit(EXIT_FAILURE);
+        exit(1);
     }
     int numFiles = 0;
 
@@ -510,99 +626,75 @@ bool fileExists(const char *path)
     return false;
 }
 
-void addFile(const char *path)
+void setFileSensitivity(FileInfo *fileInfo, bool sensitive) {
+    fileInfo->sensitive = sensitive;
+}
+
+void addFile(const char *path, bool sensitive, FileInfo *fileInfos)
 {
     if (!fileExists(path))
     {
-        printf("Le fichier n'existe pas.\n");
+        printf("Le fichier %s n'existe pas.\n", path);
         return;
     }
 
-    FILE *fichier = fopen(configFile, "r+");
+    FILE *fichier = fopen(configFile, "a+");
     if (fichier == NULL)
     {
         fprintf(stderr, "Erreur lors de l'ouverture du fichier de configuration\n");
         exit(1);
     }
 
-    // Déplacer le curseur à la fin du fichier
     fseek(fichier, 0, SEEK_END);
 
-    // Vérifier si le fichier est vide ou si la dernière ligne est vide
-    bool isEmptyFile = (ftell(fichier) == 0);
-    if (!isEmptyFile)
+    fprintf(fichier, "%s %d\n", path, sensitive ? 1 : 0);
+
+
+    if (fileCount < MAX_FILES)
     {
-        // Reculer le curseur jusqu'à la dernière ligne non vide
-        fseek(fichier, -1, SEEK_CUR);
-        while (fgetc(fichier) == '\n')
-        {
-            fseek(fichier, -2, SEEK_CUR);
-            if (ftell(fichier) <= 0)
-            {
-                isEmptyFile = true;
-                break;
-            }
-        }
+        strncpy(fileInfos[fileCount].filename, path, MAX_PATH_LENGTH - 1);
+        fileInfos[fileCount].filename[MAX_PATH_LENGTH - 1] = '\0';
+        fileInfos[fileCount].sensitive = sensitive;
+        fileCount++;
+    }
+    else
+    {
+        fprintf(stderr, "Nombre maximal de fichiers atteint.\n");
     }
 
-    if (!isEmptyFile)
-    {
-        fprintf(fichier, "\n");
-    }
-
-    fprintf(fichier, "%s", path);
 
     fclose(fichier);
-    printf("Fichier ajouté avec succès !\n");
+    printf("Fichier ajouté avec succès : %s\n", path);
 }
 
-void removeFile(const char *path)
-{
+void removeFilePathByIndex(int index) {
     FILE *fichier = fopen(configFile, "r");
-    if (fichier == NULL)
-    {
+    if (fichier == NULL) {
         fprintf(stderr, "Erreur lors de l'ouverture du fichier de configuration\n");
         exit(1);
     }
 
     FILE *tempFile = fopen("./temp.txt", "w");
-    if (tempFile == NULL)
-    {
+    if (tempFile == NULL) {
         fprintf(stderr, "Erreur lors de l'ouverture du fichier temporaire\n");
         exit(1);
     }
 
     char line[MAX_PATH_LENGTH];
-    bool removed = false;
-    while (fgets(line, sizeof(line), fichier) != NULL)
-    {
-        char *cleanLine = strtok(line, "\r\n");
+    int lineNumber = 0;
+    while (fgets(line, sizeof(line), fichier) != NULL) {
+        lineNumber++;
 
-        if (strcmp(cleanLine, path) != 0)
-        {
+        if (lineNumber != index) {
             fputs(line, tempFile);
-            fputs("\n", tempFile);
-        }
-        else
-        {
-            removed = true;
         }
     }
 
     fclose(fichier);
     fclose(tempFile);
 
-    if (removed)
-    {
-        remove(configFile);
-        rename("./temp.txt", configFile);
-        printf("Fichier supprimé avec succès !\n");
-    }
-    else
-    {
-        remove("./temp.txt");
-        printf("Le fichier n'a pas été trouvé dans la liste.\n");
-    }
+    remove(configFile);
+    rename("./temp.txt", configFile);
 }
 
 void displayFiles()
@@ -620,9 +712,238 @@ void displayFiles()
     int fileNumber = 1;
     while (fgets(line, sizeof(line), fichier) != NULL)
     {
-        printf("%d. %s", fileNumber, line);
+        char path[MAX_PATH_LENGTH];
+        int sensitivity;
+
+        sscanf(line, "%s %d", path, &sensitivity);
+
+        printf("%d. %s (Sensible: %s)\n", fileNumber, path, sensitivity ? "Oui" : "Non");
         fileNumber++;
     }
 
     fclose(fichier);
+}
+
+void onAddButtonClicked(GtkWidget *widget, gpointer data)
+{
+    GtkWidget *dialog;
+    GtkWidget *content_area;
+    GtkWidget *label;
+    GtkWidget *entry;
+    GtkWidget *checkButton;
+    FileInfo *fileInfos = (FileInfo *)data;
+
+    dialog = gtk_dialog_new_with_buttons("Ajouter un chemin",
+                                         GTK_WINDOW(window),
+                                         GTK_DIALOG_MODAL,
+                                         "_Annuler",
+                                         GTK_RESPONSE_CANCEL,
+                                         "_Ajouter",
+                                         GTK_RESPONSE_ACCEPT,
+                                         NULL);
+
+    content_area = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+
+    label = gtk_label_new("Entrez le chemin du fichier à surveiller :");
+    gtk_box_pack_start(GTK_BOX(content_area), label, FALSE, FALSE, 0);
+
+    entry = gtk_entry_new();
+    gtk_box_pack_start(GTK_BOX(content_area), entry, FALSE, FALSE, 0);
+
+    checkButton = gtk_check_button_new_with_label("Sensible");
+    gtk_box_pack_start(GTK_BOX(content_area), checkButton, FALSE, FALSE, 0);
+
+    gtk_widget_show_all(dialog);
+
+    gint response = gtk_dialog_run(GTK_DIALOG(dialog));
+
+    if (response == GTK_RESPONSE_ACCEPT)
+    {
+        const gchar *text = gtk_entry_get_text(GTK_ENTRY(entry));
+        gboolean active = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(checkButton));
+        addFile(text, active, fileInfos);
+    }
+
+    gtk_widget_destroy(dialog);
+}
+
+void onRemoveButtonClicked(GtkWidget *widget, gpointer data)
+{
+    GtkWidget *dialog;
+    GtkWidget *content_area;
+    GtkWidget *label;
+    GtkWidget *entry;
+
+    dialog = gtk_dialog_new_with_buttons("Supprimer un chemin",
+                                         GTK_WINDOW(window),
+                                         GTK_DIALOG_MODAL,
+                                         "_Annuler",
+                                         GTK_RESPONSE_CANCEL,
+                                         "_Supprimer",
+                                         GTK_RESPONSE_ACCEPT,
+                                         NULL);
+
+    content_area = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+
+    label = gtk_label_new("Entrez le numéro du fichier à supprimer :");
+    gtk_box_pack_start(GTK_BOX(content_area), label, FALSE, FALSE, 0);
+
+    entry = gtk_entry_new();
+    gtk_box_pack_start(GTK_BOX(content_area), entry, FALSE, FALSE, 0);
+
+    gtk_widget_show_all(dialog);
+
+    gint response = gtk_dialog_run(GTK_DIALOG(dialog));
+
+    if (response == GTK_RESPONSE_ACCEPT)
+    {
+        const gchar *text = gtk_entry_get_text(GTK_ENTRY(entry));
+        int index = atoi(text);
+        removeFilePathByIndex(index);
+    }
+
+    gtk_widget_destroy(dialog);
+}
+
+void update_textview(const gchar *text)
+{
+    GtkTextBuffer *buffer;
+    GtkTextIter iter;
+
+    buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(textView));
+
+    gtk_text_buffer_get_iter_at_offset(buffer, &iter, -1);
+    gtk_text_buffer_insert(buffer, &iter, text, -1);
+}
+
+void on_dialog_response(GtkDialog *dialog, gint response_id, gpointer user_data) {
+    gtk_widget_destroy(GTK_WIDGET(dialog));
+}
+
+void onDisplayButtonClicked(GtkWidget *widget, gpointer data)
+{
+    GtkWidget *dialog;
+    GtkWidget *content_area;
+    GtkWidget *scrolled_window;
+    GtkWidget *text_view;
+
+    dialog = gtk_dialog_new_with_buttons("Liste des fichiers surveillés",
+                                         GTK_WINDOW(window),
+                                         GTK_DIALOG_MODAL,
+                                         "_Fermer",
+                                         GTK_RESPONSE_CLOSE,
+                                         NULL);
+
+    gtk_window_set_default_size(GTK_WINDOW(dialog), 400, 300);
+
+    content_area = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+
+    scrolled_window = gtk_scrolled_window_new(NULL, NULL);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled_window),
+                                   GTK_POLICY_AUTOMATIC,
+                                   GTK_POLICY_AUTOMATIC);
+    gtk_box_pack_start(GTK_BOX(content_area), scrolled_window, TRUE, TRUE, 0);
+
+    text_view = gtk_text_view_new();
+    gtk_text_view_set_editable(GTK_TEXT_VIEW(text_view), FALSE);
+    gtk_container_add(GTK_CONTAINER(scrolled_window), text_view);
+
+    GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(text_view));
+
+    FILE *fichier = fopen(configFile, "r");
+    if (fichier == NULL)
+    {
+        fprintf(stderr, "Erreur lors de l'ouverture du fichier de configuration\n");
+        exit(1);
+    }
+
+    char line[MAX_PATH_LENGTH];
+    while (fgets(line, sizeof(line), fichier) != NULL)
+    {
+        char path[MAX_PATH_LENGTH];
+        int sensitivity;
+
+        sscanf(line, "%s %d", path, &sensitivity);
+
+        gchar *text = g_strdup_printf("%s (Sensible: %s)\n", path, sensitivity ? "Oui" : "Non");
+        gtk_text_buffer_insert_at_cursor(buffer, text, -1);
+        g_free(text);
+    }
+
+    fclose(fichier);
+
+    gtk_widget_show_all(dialog);
+    g_signal_connect(dialog, "response", G_CALLBACK(on_dialog_response), NULL);
+}
+
+gboolean refreshLog(gpointer data) {
+    if (logTextView == NULL) {
+        return G_RESOURCE_ERROR;
+    }
+
+    FILE *logFile = fopen("file_monitor.log", "r");
+    if (logFile == NULL) {
+        printf("Impossible d'ouvrir le fichier de journalisation.\n");
+        return G_SOURCE_CONTINUE;
+    }
+
+    GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(logTextView));
+    gtk_text_buffer_set_text(buffer, "", -1);
+
+    char line[512];
+    while (fgets(line, sizeof(line), logFile) != NULL) {
+        gtk_text_buffer_insert_at_cursor(buffer, line, -1);
+    }
+    fclose(logFile);
+
+    return G_SOURCE_CONTINUE;
+}
+
+void *fileMonitoringFunction() {
+    char **filePaths = getPathsFromFile();
+    int numPaths = 0;
+    while (filePaths[numPaths] != NULL)
+        numPaths++;
+
+    FileInfo *fileInfos = scanDirectories(filePaths, numPaths);
+
+    monitorFileProperties(filePaths, numPaths, fileInfos);
+
+    g_strfreev(filePaths);
+    free(fileInfos);
+
+    return NULL;
+}
+
+void onLogWindowDestroy(GtkWidget *widget, gpointer data) {
+    if (logTextView != NULL) {
+        gtk_widget_destroy(logTextView);
+        logTextView = NULL;
+    }
+}
+
+void onLogButtonClicked(GtkWidget *widget, gpointer data) {
+    logWindow = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    gtk_window_set_title(GTK_WINDOW(logWindow), "Journal des événements");
+    gtk_container_set_border_width(GTK_CONTAINER(logWindow), 10);
+    gtk_window_resize(GTK_WINDOW(logWindow), 1300, 300);
+    
+    g_signal_connect(logWindow, "destroy", G_CALLBACK(onLogWindowDestroy), NULL);
+
+    GtkWidget *scrolledWindow = gtk_scrolled_window_new(NULL, NULL);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolledWindow),
+                                   GTK_POLICY_ALWAYS,
+                                   GTK_POLICY_ALWAYS); 
+
+    gtk_container_add(GTK_CONTAINER(logWindow), scrolledWindow);
+
+    logTextView = gtk_text_view_new();
+    gtk_text_view_set_editable(GTK_TEXT_VIEW(logTextView), FALSE);
+    gtk_container_add(GTK_CONTAINER(scrolledWindow), logTextView);
+
+    gtk_widget_show_all(logWindow);
+
+    pthread_create(&fileMonitoringThread, NULL, fileMonitoringFunction, NULL);
+
+    g_timeout_add_seconds(LOG_INTERVAL, refreshLog, NULL);
 }
