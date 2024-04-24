@@ -81,7 +81,7 @@ void *fileMonitoringFunction();
 void onLogWindowDestroy(GtkWidget *widget, gpointer data);
 void setFileSensitivity(FileInfo *fileInfo, bool sensitive);
 char* calculateSHA512(const char *path);
-void *monitorFiles();
+void *monitorFilesHash();
 
 GtkWidget *window;
 GtkWidget *addButton;
@@ -100,8 +100,8 @@ int main(int argc, char *argv[]) {
     int number;
     FileInfo fileInfos[MAX_FILES];
     char **filePaths = getPathsFromFile();
-    pthread_create(&Thread, NULL, monitorFiles,configFile);
-    
+    pthread_create(&Thread, NULL, monitorFilesHash,configFile);
+
     int choice;
     do
     {
@@ -759,7 +759,7 @@ char* calculateSHA512(const char *path) {
     }
     return hash;
 }
-void *monitorFiles()
+void *monitorFilesHash()
 {
     while (1)
     {
