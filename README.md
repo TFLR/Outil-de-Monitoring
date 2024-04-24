@@ -38,7 +38,7 @@ Insert gif or link to demo
 
 - [@BBOUQUIER](https://github.com/BBOUQUIER) BOUQUIER Baptiste 
 
-- [@]() KEITA Bakary
+- [@Bakgor75](https://github.com/Bakgor75) KEITA Bakary
 
 - [@TFLR](https://github.com/TFLR) MALLIPOUDY Vencatveer
 
