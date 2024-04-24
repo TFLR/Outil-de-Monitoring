@@ -3,7 +3,7 @@
 
 # Introduction 
 
-##### Simplifiez la gestion de la sécurité des données sur Linux avec notre outil de Monitoring qui centralise la surveillance des modifications de fichiers et la gestion des autorisations d'accès.
+#### Simplifiez la gestion de la sécurité des données sur Linux avec notre outil de Monitoring qui centralise la surveillance des modifications de fichiers et la gestion des autorisations d'accès.
 
 #### Cet outil offre aux administrateurs système une solution de sécurité renforcée pour surveiller les modifications de fichiers et contrôler les accès, garantissant ainsi la protection des données. 
 
