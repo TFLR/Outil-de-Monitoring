@@ -19,12 +19,14 @@
 #define LOG_INTERVAL 1
 #define MAX_FILES 1000
 #define MAX_PATH_LENGTH 256
+#define MAX_HASH_LENGTH 129
 #define configFile "./config.txt"
 #define SENSITIVE_YES 1
 #define SENSITIVE_NO 0
 
 time_t lastLogTime = 0;
 
+pthread_t Thread;
 pthread_t fileMonitoringThread;
 
 typedef struct
@@ -79,6 +81,7 @@ void *fileMonitoringFunction();
 void onLogWindowDestroy(GtkWidget *widget, gpointer data);
 void setFileSensitivity(FileInfo *fileInfo, bool sensitive);
 char* calculateSHA512(const char *path);
+void *monitorFiles();
 
 GtkWidget *window;
 GtkWidget *addButton;
@@ -97,7 +100,8 @@ int main(int argc, char *argv[]) {
     int number;
     FileInfo fileInfos[MAX_FILES];
     char **filePaths = getPathsFromFile();
-
+    pthread_create(&Thread, NULL, monitorFiles,configFile);
+    
     int choice;
     do
     {
@@ -720,10 +724,8 @@ void displayFiles()
         char path[MAX_PATH_LENGTH];
         int sensitivity;
 
-        // Lire le chemin du fichier et la sensibilité
         if (sscanf(line, "%s %d", path, &sensitivity) == 2)
         {
-            // Afficher le chemin du fichier et la sensibilité
             printf("%d. %s (Sensible: %s)\n", fileNumber, path, sensitivity ? "Oui" : "Non");
             fileNumber++;
         }
@@ -733,30 +735,23 @@ void displayFiles()
 
 char* calculateSHA512(const char *path) {
 
-    // Vérifie si le chemin spécifié est un fichier
     if (stat(path, &buf) != 0 || S_ISDIR(buf.st_mode)) {
         fprintf(stderr, "Le chemin spécifié n'est pas un fichier valide.\n");
         return NULL;
     }
-    // Construction de la commande "sha512sum"
     snprintf(command, sizeof(command), "sha512sum %s", path);
 
-    // Ouverture d'un pipe pour capturer la sortie de la commande
     FILE *pipe = popen(command, "r");
     if (pipe == NULL) {
         fprintf(stderr, "Erreur lors de l'exécution de la commande.\n");
         return NULL;
     }
-    // Lecture de la sortie de la commande dans le tampon de sortie
     fgets(output, sizeof(output), pipe);
 
-    // Fermeture du pipe
     pclose(pipe);
 
-    // Suppression du caractère de nouvelle ligne de la sortie
     output[strcspn(output, "\n")] = '\0';
 
-    // Extraction du hash à partir de la sortie
     char *hash = strtok(output, " ");
     if (hash == NULL) {
         fprintf(stderr, "Erreur lors de l'allocation de mémoire.\n");
@@ -764,6 +759,51 @@ char* calculateSHA512(const char *path) {
     }
     return hash;
 }
+void *monitorFiles()
+{
+    while (1)
+    {
+        FILE *config = fopen(configFile, "r");
+        if (config == NULL)
+        {
+            fprintf(stderr, "Error opening configuration file\n");
+            exit(1);
+        }
+
+        char line[MAX_PATH_LENGTH];
+        while (fgets(line, sizeof(line), config) != NULL)
+        {
+            char path[MAX_PATH_LENGTH];
+            int sensitivity;
+            char storedHash[MAX_HASH_LENGTH];
+
+            if (sscanf(line, "%s %d %s", path, &sensitivity, storedHash) == 3)
+            {
+                char *hash = calculateSHA512(path);
+                if (hash == NULL)
+                {
+                    fprintf(stderr, "Error calculating hash for file: %s\n", path);
+                    continue;
+                }
+
+                if (strcmp(hash, storedHash) != 0)
+                {
+                    char logMessage[512];
+                    snprintf(logMessage, sizeof(logMessage), "Changement de Hash detecté pour le fichier : %s", path);
+                    logEvent(logMessage);
+                }
+            }
+        }
+
+        fclose(config);
+
+        sleep(60);
+    }
+    return NULL;
+}
+
+
+
 
 void onAddButtonClicked(GtkWidget *widget, gpointer data)
 {
