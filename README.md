@@ -33,12 +33,11 @@ Insert gif or link to demo
 
 ## Authors
 
-
-- [@Zelest](https://github.com/Zelest) MASSÉ Théo
-
 - [@BBOUQUIER](https://github.com/BBOUQUIER) BOUQUIER Baptiste 
 
 - [@Bakgor75](https://github.com/Bakgor75) KEITA Bakary
+
+- [@Zelest](https://github.com/Zelest) MASSÉ Théo
 
 - [@TFLR](https://github.com/TFLR) MALLIPOUDY Vencatveer
 
