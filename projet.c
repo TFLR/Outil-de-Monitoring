@@ -18,7 +18,7 @@
 
 #define LOG_INTERVAL 1
 #define MAX_FILES 1000
-#define MAX_PATH_LENGTH 100
+#define MAX_PATH_LENGTH 256
 #define configFile "./config.txt"
 #define SENSITIVE_YES 1
 #define SENSITIVE_NO 0
@@ -42,6 +42,9 @@ struct file
 struct file files[100];
 int fileCount = 0;
 int numPaths = 0;
+struct stat buf;
+char command[1000];
+char output[1000];
 
 //fonction gestion droit
 void ajouteperms(char *fichier, int addid);
@@ -75,6 +78,7 @@ void onLogButtonClicked(GtkWidget *widget, gpointer data);
 void *fileMonitoringFunction();
 void onLogWindowDestroy(GtkWidget *widget, gpointer data);
 void setFileSensitivity(FileInfo *fileInfo, bool sensitive);
+char* calculateSHA512(const char *path);
 
 GtkWidget *window;
 GtkWidget *addButton;
@@ -94,16 +98,6 @@ int main(int argc, char *argv[]) {
     FileInfo fileInfos[MAX_FILES];
     char **filePaths = getPathsFromFile();
 
-    while (filePaths[numPaths] != NULL)
-    {
-        numPaths++;
-        printf("%d\n", numPaths);
-    }
-    printf("Liste des chemins depuis main() :\n");
-    for (int i = 0; i < numPaths; i++)
-    {
-        printf("%s\n", filePaths[i]);
-    }
     int choice;
     do
     {
@@ -139,10 +133,8 @@ int main(int argc, char *argv[]) {
             displayFiles();
             break;
         case 4:
-            //parseFilePaths(filePaths, numPaths);
-            //FileInfo *fileInfos = scanDirectories(filePaths, numPaths);
-            //monitorFileProperties(filePaths, numPaths, fileInfos);
-            fileMonitoringFunction();
+            pthread_create(&fileMonitoringThread, NULL, fileMonitoringFunction, NULL);
+            printf("Le monitoring est lancé !\n");
             break;
         case 5:
             gestiondroit();
@@ -226,7 +218,7 @@ void parseFilePaths(char *filePaths[], int size) {
 
 char **getPathsFromFile()
 {
-    FILE *file = fopen(configFile, "r");
+    FILE *file = fopen(configFile, "a+");
     if (file == NULL)
     {
         fprintf(stderr, "Erreur lors de l'ouverture du fichier %s\n", configFile);
@@ -288,13 +280,6 @@ void monitorFileProperties(char **filePaths, int numPaths, FileInfo fileInfos[])
         printf("No file paths provided for monitoring.\n");
         return;
     }
-
-    printf("Liste des chemins depuis main() :\n");
-    for (int i = 0; i < numPaths; i++)
-    {
-        printf("%s\n", filePaths[i]);
-    }
-    
 
     int fd = inotify_init();
     if (fd < 0)
@@ -661,7 +646,7 @@ void addFile(const char *path, bool sensitive, FileInfo *fileInfos)
 
     fseek(fichier, 0, SEEK_END);
 
-    fprintf(fichier, "%s %d\n", path, sensitive ? 1 : 0);
+    fprintf(fichier, "%s %d %s\n", path, sensitive ? 1 : 0, calculateSHA512(path));
 
 
     if (fileCount < MAX_FILES)
@@ -670,6 +655,12 @@ void addFile(const char *path, bool sensitive, FileInfo *fileInfos)
         fileInfos[fileCount].filename[MAX_PATH_LENGTH - 1] = '\0';
         fileInfos[fileCount].sensitive = sensitive;
         fileCount++;
+
+        if (sensitive) {
+            if (chmod(path, 0640) != 0) {
+                fprintf(stderr, "Erreur lors de la modification des autorisations du fichier %s\n", path);
+            }
+        }
     }
     else
     {
@@ -729,13 +720,49 @@ void displayFiles()
         char path[MAX_PATH_LENGTH];
         int sensitivity;
 
-        sscanf(line, "%s %d", path, &sensitivity);
-
-        printf("%d. %s (Sensible: %s)\n", fileNumber, path, sensitivity ? "Oui" : "Non");
-        fileNumber++;
+        // Lire le chemin du fichier et la sensibilité
+        if (sscanf(line, "%s %d", path, &sensitivity) == 2)
+        {
+            // Afficher le chemin du fichier et la sensibilité
+            printf("%d. %s (Sensible: %s)\n", fileNumber, path, sensitivity ? "Oui" : "Non");
+            fileNumber++;
+        }
     }
-
     fclose(fichier);
+}
+
+char* calculateSHA512(const char *path) {
+
+    // Vérifie si le chemin spécifié est un fichier
+    if (stat(path, &buf) != 0 || S_ISDIR(buf.st_mode)) {
+        fprintf(stderr, "Le chemin spécifié n'est pas un fichier valide.\n");
+        return NULL;
+    }
+    // Construction de la commande "sha512sum"
+    snprintf(command, sizeof(command), "sha512sum %s", path);
+
+    // Ouverture d'un pipe pour capturer la sortie de la commande
+    FILE *pipe = popen(command, "r");
+    if (pipe == NULL) {
+        fprintf(stderr, "Erreur lors de l'exécution de la commande.\n");
+        return NULL;
+    }
+    // Lecture de la sortie de la commande dans le tampon de sortie
+    fgets(output, sizeof(output), pipe);
+
+    // Fermeture du pipe
+    pclose(pipe);
+
+    // Suppression du caractère de nouvelle ligne de la sortie
+    output[strcspn(output, "\n")] = '\0';
+
+    // Extraction du hash à partir de la sortie
+    char *hash = strtok(output, " ");
+    if (hash == NULL) {
+        fprintf(stderr, "Erreur lors de l'allocation de mémoire.\n");
+        return NULL;
+    }
+    return hash;
 }
 
 void onAddButtonClicked(GtkWidget *widget, gpointer data)
@@ -872,6 +899,7 @@ void onDisplayButtonClicked(GtkWidget *widget, gpointer data)
     }
 
     char line[MAX_PATH_LENGTH];
+    int lineNumber = 1;
     while (fgets(line, sizeof(line), fichier) != NULL)
     {
         char path[MAX_PATH_LENGTH];
@@ -879,15 +907,18 @@ void onDisplayButtonClicked(GtkWidget *widget, gpointer data)
 
         sscanf(line, "%s %d", path, &sensitivity);
 
-        gchar *text = g_strdup_printf("%s (Sensible: %s)\n", path, sensitivity ? "Oui" : "Non");
+        gchar *text = g_strdup_printf("%d. %s (Sensible: %s)\n", lineNumber, path, sensitivity ? "Oui" : "Non");
         gtk_text_buffer_insert_at_cursor(buffer, text, -1);
         g_free(text);
+
+        lineNumber++;
     }
 
     fclose(fichier);
 
     gtk_widget_show_all(dialog);
-    g_signal_connect(dialog, "response", G_CALLBACK(on_dialog_response), NULL);
+    gtk_dialog_run(GTK_DIALOG(dialog));
+    gtk_widget_destroy(dialog);
 }
 
 gboolean refreshLog(gpointer data) {

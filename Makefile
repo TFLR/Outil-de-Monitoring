@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = `pkg-config --cflags --libs gtk+-3.0` -Wall -g
+CFLAGS = `pkg-config --cflags --libs gtk+-3.0` -Wall -g -lpthread
 
 # Liste des fichiers sources
 SRCS = projet.c gestiondroit/main.c gestiondroit/extended_permissions.c gestiondroit/file_properties.c gestiondroit/menu.c gestiondroit/standard_permissions.c
