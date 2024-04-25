@@ -901,7 +901,7 @@ void onDisplayButtonClicked(GtkWidget *widget, gpointer data)
                                          "_Fermer", GTK_RESPONSE_CLOSE,
                                          NULL);
 
-    gtk_window_set_default_size(GTK_WINDOW(dialog), 400, 300);
+    gtk_window_set_default_size(GTK_WINDOW(dialog), 700, 300);
     content_area = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
     scrolled_window = gtk_scrolled_window_new(NULL, NULL);
     gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled_window),
