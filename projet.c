@@ -157,6 +157,11 @@ int main(int argc, char *argv[])
         case 2:
             printf("le numéro du chemin à supprimer : ");
             scanf("%d", &number);
+            if (pthread_cancel(fileMonitoringThread) == 0)
+            {
+                pthread_cancel(fileMonitoringThread);
+                printf("Le monitoring est arrêté !\n");
+            }
             removeFilePathByIndex(number);
             break;
         case 3:
@@ -663,7 +668,7 @@ void removeFilePathByIndex(int index)
             fputs(line, tempFile);
         }
     }
-
+    pthread_create(&fileMonitoringThread, NULL, fileMonitoringFunction, NULL);
     fclose(fichier);
     fclose(tempFile);
 
@@ -851,6 +856,11 @@ void onRemoveButtonClicked(GtkWidget *widget, gpointer data)
     {
         const gchar *text = gtk_entry_get_text(GTK_ENTRY(entry));
         int index = atoi(text);
+        if (pthread_cancel(fileMonitoringThread) == 0)
+            {
+                pthread_cancel(fileMonitoringThread);
+                printf("Le monitoring est arrêté !\n");
+            }
         removeFilePathByIndex(index);
     }
 
