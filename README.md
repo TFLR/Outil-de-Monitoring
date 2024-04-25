@@ -10,8 +10,6 @@
 
 ## Installation 
 
-## Installation
-
 ## Installez et exécutez notre projet GitHub en quelques étapes
 
 #### Prérequis : Assurez-vous d'avoir installé les paquets ```libgtk-3-dev``` et ```pkg-config``` sur votre système. 
@@ -19,7 +17,10 @@
 #### Vous pouvez les installer en exécutant la commande suivante dans votre terminal :
 
 
-`````sudo apt-get install libgtk-3-dev pkg-config --cflags gtk+-3.0`````
+`````sudo apt-get install libgtk-3-dev ````` 
+
+
+`````pkg-config --cflags gtk+-3.0`````
 
 
 #### Clonage du dépôt : Clonez le dépôt GitHub du projet en exécutant la commande suivante dans votre terminal :
@@ -39,9 +40,6 @@
 
 #### Exécution : Lancez l'application en exécutant la commande suivante : 
 ``` sudo ./projet ```
-
-###  ! Remplacez ./projet par le nom réel du fichier exécutable de votre projet si nécessaire.
-
 
 ## Fonctionalité 
 
