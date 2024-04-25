@@ -639,6 +639,15 @@ void removeFilePathByIndex(int index)
         }
     }
 
+    // Réinitialiser les informations de monitoring
+    pthread_cancel(fileMonitoringThread); // Annuler le thread de monitoring actuel
+
+    // Reconstruire la liste des fichiers à surveiller
+    char **filePaths = getPathsFromFile();
+    int numPaths = 0;
+    while (filePaths[numPaths] != NULL)
+        numPaths++;
+
     fclose(fichier);
     fclose(tempFile);
 
