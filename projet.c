@@ -35,7 +35,21 @@ typedef struct
     mode_t permissions;
     bool sensitive;
 } FileInfo;
+typedef enum
+{
+    OWNER,
+    GROUP,
+    OTHERS,
+} PermissionType;
 
+typedef struct
+{
+    gchar *path;
+    mode_t mode;
+    gboolean addPermission;
+    GtkWidget *infoLabel;
+    PermissionType type;
+} PermissionData;
 struct file
 {
     char path[MAX_PATH_LENGTH];
@@ -82,6 +96,17 @@ void onLogWindowDestroy(GtkWidget *widget, gpointer data);
 void setFileSensitivity(FileInfo *fileInfo, bool sensitive);
 char *calculateSHA512(const char *path);
 void *monitorFilesHash();
+void onPathButtonClicked(GtkWidget *widget, gpointer data);
+void modifyPermissions(GtkWidget *widget, gpointer mode_ptr);
+void updatePermissionsDisplay(GtkWidget *label, const char *path);
+void addPermissionButtons(GtkWidget *vbox, const gchar *path, GtkWidget *infoLabel, PermissionType type);
+void removePermissionButtons(GtkWidget *vbox, const gchar *path, GtkWidget *infoLabel, PermissionType type);
+void addSpecialPermissionButtons(GtkWidget *vbox, const gchar *path, GtkWidget *infoLabel);
+void removeSpecialPermissionButtons(GtkWidget *vbox, const gchar *path, GtkWidget *infoLabel);
+gchar *formatPermissions(mode_t mode);
+gchar *formatSinglePermissionSet(const gchar *label, mode_t perms);
+gchar *formatSpecialPermissions(mode_t mode);
+mode_t calculateMode(mode_t baseMode, PermissionType type);
 
 GtkWidget *window;
 GtkWidget *addButton;
@@ -639,15 +664,6 @@ void removeFilePathByIndex(int index)
         }
     }
 
-    // Réinitialiser les informations de monitoring
-    pthread_cancel(fileMonitoringThread); // Annuler le thread de monitoring actuel
-
-    // Reconstruire la liste des fichiers à surveiller
-    char **filePaths = getPathsFromFile();
-    int numPaths = 0;
-    while (filePaths[numPaths] != NULL)
-        numPaths++;
-
     fclose(fichier);
     fclose(tempFile);
 
@@ -863,30 +879,27 @@ void onDisplayButtonClicked(GtkWidget *widget, gpointer data)
     GtkWidget *dialog;
     GtkWidget *content_area;
     GtkWidget *scrolled_window;
-    GtkWidget *text_view;
+    GtkWidget *vbox;
+    GtkWidget *hbox;
+    GtkWidget *label;
+    GtkWidget *button;
+    GtkWidget *sensitive_label;
 
+    // Création du dialogue sans modalité pour tester
     dialog = gtk_dialog_new_with_buttons("Liste des fichiers surveillés",
                                          GTK_WINDOW(window),
-                                         GTK_DIALOG_MODAL,
-                                         "_Fermer",
-                                         GTK_RESPONSE_CLOSE,
+                                         0, // Aucune modalité
+                                         "_Fermer", GTK_RESPONSE_CLOSE,
                                          NULL);
 
     gtk_window_set_default_size(GTK_WINDOW(dialog), 400, 300);
-
     content_area = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
-
     scrolled_window = gtk_scrolled_window_new(NULL, NULL);
     gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled_window),
-                                   GTK_POLICY_AUTOMATIC,
-                                   GTK_POLICY_AUTOMATIC);
+                                   GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
     gtk_box_pack_start(GTK_BOX(content_area), scrolled_window, TRUE, TRUE, 0);
-
-    text_view = gtk_text_view_new();
-    gtk_text_view_set_editable(GTK_TEXT_VIEW(text_view), FALSE);
-    gtk_container_add(GTK_CONTAINER(scrolled_window), text_view);
-
-    GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(text_view));
+    vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+    gtk_container_add(GTK_CONTAINER(scrolled_window), vbox);
 
     FILE *fichier = fopen(configFile, "r");
     if (fichier == NULL)
@@ -902,20 +915,32 @@ void onDisplayButtonClicked(GtkWidget *widget, gpointer data)
         char path[MAX_PATH_LENGTH];
         int sensitivity;
 
-        sscanf(line, "%s %d", path, &sensitivity);
+        if (sscanf(line, "%s %d", path, &sensitivity) == 2) {
+            // Créer une boîte horizontale pour contenir le numéro de ligne, le bouton et l'indication de sensibilité
+            hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+            gchar *label_text = g_strdup_printf("%d.", lineNumber);
+            label = gtk_label_new(label_text);
+            g_free(label_text);
 
-        gchar *text = g_strdup_printf("%d. %s (Sensible: %s)\n", lineNumber, path, sensitivity ? "Oui" : "Non");
-        gtk_text_buffer_insert_at_cursor(buffer, text, -1);
-        g_free(text);
+            button = gtk_button_new_with_label(path);
+            sensitive_label = gtk_label_new(sensitivity ? "Sensible: Oui" : "Sensible: Non");
 
-        lineNumber++;
+            gtk_box_pack_start(GTK_BOX(hbox), label, FALSE, FALSE, 0);
+            gtk_box_pack_start(GTK_BOX(hbox), button, TRUE, TRUE, 0);
+            gtk_box_pack_start(GTK_BOX(hbox), sensitive_label, FALSE, FALSE, 0);
+
+            gtk_box_pack_start(GTK_BOX(vbox), hbox, FALSE, FALSE, 0);
+            
+            // Connecter le bouton au callback
+            g_signal_connect(button, "clicked", G_CALLBACK(onPathButtonClicked), NULL);
+            lineNumber++;
+        }
     }
 
     fclose(fichier);
 
     gtk_widget_show_all(dialog);
-    gtk_dialog_run(GTK_DIALOG(dialog));
-    gtk_widget_destroy(dialog);
+    g_signal_connect_swapped(dialog, "response", G_CALLBACK(gtk_widget_destroy), dialog);
 }
 
 gboolean refreshLog(gpointer data)
@@ -997,4 +1022,269 @@ void onLogButtonClicked(GtkWidget *widget, gpointer data)
     pthread_create(&fileMonitoringThread, NULL, fileMonitoringFunction, NULL);
 
     g_timeout_add_seconds(LOG_INTERVAL, refreshLog, NULL);
+}
+void onPathButtonClicked(GtkWidget *widget, gpointer data)
+{
+    const gchar *path = gtk_button_get_label(GTK_BUTTON(widget));
+
+    GtkWidget *pathWindow = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    gtk_window_set_title(GTK_WINDOW(pathWindow), path);
+    gtk_window_set_default_size(GTK_WINDOW(pathWindow), 400, 700);
+
+    GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+    gtk_container_add(GTK_CONTAINER(pathWindow), vbox);
+
+    GtkWidget *infoLabel = gtk_label_new("");
+    gtk_box_pack_start(GTK_BOX(vbox), infoLabel, FALSE, FALSE, 0);
+    updatePermissionsDisplay(infoLabel, path);
+
+    addPermissionButtons(vbox, path, infoLabel, OWNER);
+    removePermissionButtons(vbox, path, infoLabel, OWNER);
+    addPermissionButtons(vbox, path, infoLabel, GROUP);
+    removePermissionButtons(vbox, path, infoLabel, GROUP);
+    addPermissionButtons(vbox, path, infoLabel, OTHERS);
+    removePermissionButtons(vbox, path, infoLabel, OTHERS);
+
+    GtkWidget *addSpecialLabel = gtk_label_new("Ajouter droits spéciaux :");
+    gtk_box_pack_start(GTK_BOX(vbox), addSpecialLabel, FALSE, FALSE, 0);
+    addSpecialPermissionButtons(vbox, path, infoLabel);
+
+    GtkWidget *removeSpecialLabel = gtk_label_new("Supprimer droits spéciaux :");
+    gtk_box_pack_start(GTK_BOX(vbox), removeSpecialLabel, FALSE, FALSE, 0);
+    removeSpecialPermissionButtons(vbox, path, infoLabel);
+
+    // Création du GtkButtonBox pour le bouton Fermer
+    GtkWidget *buttonBox = gtk_button_box_new(GTK_ORIENTATION_HORIZONTAL);
+    gtk_button_box_set_layout(GTK_BUTTON_BOX(buttonBox), GTK_BUTTONBOX_END);
+    GtkWidget *closeButton = gtk_button_new_with_label("Fermer");
+    gtk_container_add(GTK_CONTAINER(buttonBox), closeButton);
+    gtk_box_pack_end(GTK_BOX(vbox), buttonBox, FALSE, FALSE, 0);
+    g_signal_connect_swapped(closeButton, "clicked", G_CALLBACK(gtk_widget_destroy), pathWindow);
+
+    gtk_widget_show_all(pathWindow);
+}
+
+
+void addPermissionButtons(GtkWidget *vbox, const gchar *path, GtkWidget *infoLabel, PermissionType type)
+{
+    gchar *labelText = NULL;
+    switch (type)
+    {
+    case OWNER:
+        labelText = "Ajouter droits propriétaire:";
+        break;
+    case GROUP:
+        labelText = "Ajouter droits groupe:";
+        break;
+    case OTHERS:
+        labelText = "Ajouter droits autres:";
+        break;
+    }
+
+    GtkWidget *label = gtk_label_new(labelText);
+    gtk_box_pack_start(GTK_BOX(vbox), label, FALSE, FALSE, 0);
+
+    GtkWidget *addBox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+    gtk_box_pack_start(GTK_BOX(vbox), addBox, FALSE, FALSE, 0);
+
+    mode_t modes[] = {S_IRUSR, S_IWUSR, S_IXUSR}; // Base permissions for owner
+    const char *labels[] = {"Lecture", "Écriture", "Exécution"};
+
+    for (int i = 0; i < 3; i++)
+    {
+        GtkWidget *button = gtk_button_new_with_label(labels[i]);
+        PermissionData *permData = g_new(PermissionData, 1);
+        permData->path = g_strdup(path);
+        permData->mode = calculateMode(modes[i], type); // Adjust mode based on the type
+        permData->addPermission = TRUE;
+        permData->infoLabel = infoLabel;
+
+        gtk_box_pack_start(GTK_BOX(addBox), button, TRUE, TRUE, 0);
+        g_signal_connect(button, "clicked", G_CALLBACK(modifyPermissions), permData);
+
+    }
+}
+
+void removePermissionButtons(GtkWidget *vbox, const gchar *path, GtkWidget *infoLabel, PermissionType type)
+{
+    gchar *labelText = NULL;
+    switch (type)
+    {
+    case OWNER:
+        labelText = "Supprimer droits propriétaire:";
+        break;
+    case GROUP:
+        labelText = "Supprimer droits groupe:";
+        break;
+    case OTHERS:
+        labelText = "Supprimer droits autres:";
+        break;
+    }
+
+    GtkWidget *label = gtk_label_new(labelText);
+    gtk_box_pack_start(GTK_BOX(vbox), label, FALSE, FALSE, 0);
+
+    GtkWidget *removeBox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+    gtk_box_pack_start(GTK_BOX(vbox), removeBox, FALSE, FALSE, 0);
+
+    mode_t modes[] = {S_IRUSR, S_IWUSR, S_IXUSR};
+    const char *labels[] = {"Lecture", "Écriture", "Exécution"};
+
+    for (int i = 0; i < 3; i++)
+    {
+        GtkWidget *button = gtk_button_new_with_label(labels[i]);
+        PermissionData *permData = g_new(PermissionData, 1);
+        permData->path = g_strdup(path);
+        permData->mode = calculateMode(modes[i], type); // Adjust mode based on the type
+        permData->addPermission = FALSE;
+        permData->infoLabel = infoLabel;
+
+        gtk_box_pack_start(GTK_BOX(removeBox), button, TRUE, TRUE, 0);
+        g_signal_connect(button, "clicked", G_CALLBACK(modifyPermissions), permData);
+
+    }
+}
+void addSpecialPermissionButtons(GtkWidget *vbox, const gchar *path, GtkWidget *infoLabel)
+{
+    GtkWidget *specialBox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+    gtk_box_pack_start(GTK_BOX(vbox), specialBox, FALSE, FALSE, 0);
+
+    const char *specialLabels[] = {"Set UID", "Set GID", "Sticky Bit"};
+    mode_t specialModes[] = {S_ISUID, S_ISGID, S_ISVTX}; // Corresponding special modes
+
+    for (int i = 0; i < 3; i++)
+    {
+        GtkWidget *button = gtk_button_new_with_label(specialLabels[i]);
+        PermissionData *permData = g_new(PermissionData, 1);
+        permData->path = g_strdup(path);
+        permData->mode = specialModes[i];
+        permData->addPermission = TRUE; // Special permissions can only be added
+        permData->infoLabel = infoLabel;
+
+        gtk_box_pack_start(GTK_BOX(specialBox), button, TRUE, TRUE, 0);
+        g_signal_connect(button, "clicked", G_CALLBACK(modifyPermissions), permData);
+    }
+}
+void removeSpecialPermissionButtons(GtkWidget *vbox, const gchar *path, GtkWidget *infoLabel)
+{
+    GtkWidget *removeSpecialBox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+    gtk_box_pack_start(GTK_BOX(vbox), removeSpecialBox, FALSE, FALSE, 0);
+
+    const char *specialLabels[] = {"Supprimer Set UID", "Supprimer Set GID", "Supprimer Sticky Bit"};
+    mode_t specialModes[] = {S_ISUID, S_ISGID, S_ISVTX}; // Corresponding special modes
+
+    for (int i = 0; i < 3; i++)
+    {
+        GtkWidget *button = gtk_button_new_with_label(specialLabels[i]);
+        PermissionData *permData = g_new(PermissionData, 1);
+        permData->path = g_strdup(path);
+        permData->mode = specialModes[i];
+        permData->addPermission = FALSE; // Special permissions can only be removed
+        permData->infoLabel = infoLabel;
+
+        gtk_box_pack_start(GTK_BOX(removeSpecialBox), button, TRUE, TRUE, 0);
+        g_signal_connect(button, "clicked", G_CALLBACK(modifyPermissions), permData);
+
+    }
+}
+void modifyPermissions(GtkWidget *widget, gpointer data)
+{
+    PermissionData *permData = (PermissionData *)data;
+    struct stat statbuf;
+
+    // Obtention des permissions actuelles
+    if (stat(permData->path, &statbuf) != 0)
+    {
+        gchar *errorMsg = g_strdup_printf("Erreur lors de la récupération des permissions pour %s: %s", permData->path, strerror(errno));
+        gtk_label_set_text(GTK_LABEL(permData->infoLabel), errorMsg);
+        g_free(errorMsg);
+        return;
+    }
+
+    mode_t newMode = statbuf.st_mode;
+    if (permData->addPermission)
+    {
+        newMode |= permData->mode; // Ajouter les droits
+    }
+    else
+    {
+        newMode &= ~permData->mode; // Supprimer les droits
+    }
+
+    // Application des nouvelles permissions
+    if (chmod(permData->path, newMode) != 0)
+    {
+        gchar *errorMsg = g_strdup_printf("Erreur lors de la modification des permissions pour %s: %s", permData->path, strerror(errno));
+        gtk_label_set_text(GTK_LABEL(permData->infoLabel), errorMsg);
+        g_free(errorMsg);
+    }
+    else
+    {
+        gchar *successMsg = g_strdup_printf("Permissions mises à jour pour %s", permData->path);
+        gtk_label_set_text(GTK_LABEL(permData->infoLabel), successMsg);
+        g_free(successMsg);
+    }
+
+    // Mise à jour de l'affichage des permissions
+    updatePermissionsDisplay(permData->infoLabel, permData->path);
+}
+
+
+
+void updatePermissionsDisplay(GtkWidget *infoLabel, const gchar *path)
+{
+    struct stat statbuf;
+    if (stat(path, &statbuf) == 0)
+    {
+        gchar *ownerPerms = g_strdup_printf("Propriétaire: %s%s%s",
+                                            (statbuf.st_mode & S_IRUSR) ? "Lecture " : "",
+                                            (statbuf.st_mode & S_IWUSR) ? "Écriture " : "",
+                                            (statbuf.st_mode & S_IXUSR) ? "Exécution " : "");
+
+        gchar *groupPerms = g_strdup_printf("Groupe: %s%s%s",
+                                            (statbuf.st_mode & S_IRGRP) ? "Lecture " : "",
+                                            (statbuf.st_mode & S_IWGRP) ? "Écriture " : "",
+                                            (statbuf.st_mode & S_IXGRP) ? "Exécution " : "");
+
+        gchar *otherPerms = g_strdup_printf("Autres: %s%s%s",
+                                            (statbuf.st_mode & S_IROTH) ? "Lecture " : "",
+                                            (statbuf.st_mode & S_IWOTH) ? "Écriture " : "",
+                                            (statbuf.st_mode & S_IXOTH) ? "Exécution " : "");
+
+        gchar *specialPerms = g_strdup_printf("Spécial: %s%s%s",
+                                              (statbuf.st_mode & S_ISUID) ? "Set UID " : "",
+                                              (statbuf.st_mode & S_ISGID) ? "Set GID " : "",
+                                              (statbuf.st_mode & S_ISVTX) ? "Sticky Bit " : "");
+
+        gchar *fullPermissions = g_strdup_printf("Permissions actuelles :\n%s\n%s\n%s\n%s",
+                                                 ownerPerms,
+                                                 groupPerms,
+                                                 otherPerms,
+                                                 specialPerms);
+        gtk_label_set_text(GTK_LABEL(infoLabel), fullPermissions);
+
+        g_free(ownerPerms);
+        g_free(groupPerms);
+        g_free(otherPerms);
+        g_free(specialPerms);
+        g_free(fullPermissions);
+    }
+    else
+    {
+        gtk_label_set_text(GTK_LABEL(infoLabel), "Impossible de récupérer les permissions.");
+    }
+}
+
+mode_t calculateMode(mode_t baseMode, PermissionType type)
+{
+    switch (type)
+    {
+    case OWNER:
+        return baseMode;
+    case GROUP:
+        return baseMode >> 3; // Shift to group bits
+    case OTHERS:
+        return baseMode >> 6; // Shift to others bits
+    }
+    return baseMode; // Fallback to owner if no type matches
 }
