@@ -754,7 +754,6 @@ void *monitorFilesHash()
                     if (stat(path, &buf) != 0 || S_ISDIR(buf.st_mode))
                     {
                         fprintf(stderr, "\n");
-                        return NULL;
                     }else{
                         fprintf(stderr, "Error calculating hash for file: %s\n", path);
                         continue;
