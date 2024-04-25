@@ -12,7 +12,7 @@
 
 ## Installation
 
-##Installez et exécutez notre projet GitHub en quelques étapes
+## Installez et exécutez notre projet GitHub en quelques étapes
 
 #### Prérequis : Assurez-vous d'avoir installé les paquets ```libgtk-3-dev``` et ```pkg-config``` sur votre système. 
 
