@@ -157,11 +157,6 @@ int main(int argc, char *argv[])
         case 2:
             printf("le numéro du chemin à supprimer : ");
             scanf("%d", &number);
-            if (pthread_cancel(fileMonitoringThread) == 0)
-            {
-                pthread_cancel(fileMonitoringThread);
-                printf("Le monitoring est arrêté !\n");
-            }
             removeFilePathByIndex(number);
             break;
         case 3:
