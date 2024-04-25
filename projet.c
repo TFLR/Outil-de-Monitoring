@@ -48,7 +48,7 @@ struct stat buf;
 char command[1000];
 char output[1000];
 
-//fonction gestion droit
+// fonction gestion droit
 void ajouteperms(char *fichier, int addid);
 void supprimeperms(char *fichier, int suppid);
 int menuperms();
@@ -80,7 +80,7 @@ void onLogButtonClicked(GtkWidget *widget, gpointer data);
 void *fileMonitoringFunction();
 void onLogWindowDestroy(GtkWidget *widget, gpointer data);
 void setFileSensitivity(FileInfo *fileInfo, bool sensitive);
-char* calculateSHA512(const char *path);
+char *calculateSHA512(const char *path);
 void *monitorFilesHash();
 
 GtkWidget *window;
@@ -92,7 +92,8 @@ GtkWidget *textView;
 GtkWidget *logWindow;
 GtkWidget *logTextView = NULL;
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[])
+{
 
     char path[MAX_PATH_LENGTH];
     bool sensitive;
@@ -100,7 +101,7 @@ int main(int argc, char *argv[]) {
     int number;
     FileInfo fileInfos[MAX_FILES];
     char **filePaths = getPathsFromFile();
-    pthread_create(&Thread, NULL, monitorFilesHash,configFile);
+    pthread_create(&Thread, NULL, monitorFilesHash, configFile);
 
     int choice;
     do
@@ -193,31 +194,37 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-void parseFilePaths(char *filePaths[], int size) {
-    for (int i = 0; i < size; i++) {
+void parseFilePaths(char *filePaths[], int size)
+{
+    for (int i = 0; i < size; i++)
+    {
         char *filePath = filePaths[i];
         int len = strlen(filePath);
-        
+
         // Parcourir les caractères du chemin de fichier en partant de la fin
-        for (int j = len - 1; j >= 0; j--) {
-            if (filePath[j] == '.') { // Si le caractère est un point
+        for (int j = len - 1; j >= 0; j--)
+        {
+            if (filePath[j] == '.')
+            { // Si le caractère est un point
                 // Trouver le dernier '/'
                 int k;
-                for (k = j - 1; k >= 0; k--) {
-                    if (filePath[k] == '/') {
+                for (k = j - 1; k >= 0; k--)
+                {
+                    if (filePath[k] == '/')
+                    {
                         break;
                     }
                 }
-                
+
                 // Couper la chaîne à partir de ce point
-                if (k >= 0) {
+                if (k >= 0)
+                {
                     filePath[k] = '\0';
                 }
                 break; // Sortir de la boucle une fois trouvé le point
             }
         }
     }
-
 }
 
 char **getPathsFromFile()
@@ -280,7 +287,8 @@ char **getPathsFromFile()
 
 void monitorFileProperties(char **filePaths, int numPaths, FileInfo fileInfos[])
 {
-    if (filePaths == NULL || numPaths <= 0) {
+    if (filePaths == NULL || numPaths <= 0)
+    {
         printf("No file paths provided for monitoring.\n");
         return;
     }
@@ -296,7 +304,7 @@ void monitorFileProperties(char **filePaths, int numPaths, FileInfo fileInfos[])
 
     for (int i = 0; i < numPaths; i++)
     {
-        wd[i] = inotify_add_watch(fd, filePaths[i], IN_ATTRIB | IN_MODIFY | IN_CREATE | IN_DELETE);
+        wd[i] = inotify_add_watch(fd, filePaths[i], IN_ATTRIB);
         if (wd[i] < 0)
         {
             perror("inotify_add_watch");
@@ -424,7 +432,9 @@ FileInfo *scanDirectories(char **filePaths, int numPaths)
                         continue;
 
                     char fullPath[MAX_PATH_LENGTH];
-                    strncpy(fullPath, filePaths[i], sizeof(fullPath));
+                    // snprintf(fullPath, sizeof(fullPath), "%s/%s", filePaths[i], entry->d_name);
+
+                    strncpy(fullPath, filePaths[i], MAX_PATH_LENGTH);
                     strncat(fullPath, "/", sizeof(fullPath) - strlen(fullPath) - 1);
                     strncat(fullPath, entry->d_name, sizeof(fullPath) - strlen(fullPath) - 1);
 
@@ -541,82 +551,6 @@ void updatePermissions(FileInfo *fileInfo, mode_t newPermissions)
     fileInfo->permissions = newPermissions;
 }
 
-void extractFilesToWatch(char **filePaths, int numPaths, char *fileToWatch[])
-{
-    int fileToWatchIndex = 0;
-
-    for (int i = 0; i < numPaths; ++i)
-    {
-        struct stat st;
-        if (stat(filePaths[i], &st) == 0)
-        {
-            if (S_ISDIR(st.st_mode)) // Si c'est un répertoire
-            {
-                DIR *dir = opendir(filePaths[i]);
-                if (dir == NULL)
-                {
-                    perror("opendir");
-                    exit(EXIT_FAILURE);
-                }
-
-                struct dirent *entry;
-                while ((entry = readdir(dir)) != NULL)
-                {
-                    // Ignorer les entrées spéciales "." et ".."
-                    if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
-                        continue;
-
-                    // Construire le chemin complet du fichier à surveiller
-                    char fullPath[MAX_PATH_LENGTH];
-                    strncpy(fullPath, filePaths[i], MAX_PATH_LENGTH);
-                    strncat(fullPath, "/", MAX_PATH_LENGTH - strlen(fullPath) - 1);
-                    strncat(fullPath, entry->d_name, MAX_PATH_LENGTH - strlen(fullPath) - 1);
-
-                    // Ajouter le fichier à surveiller à la liste
-                    fileToWatch[fileToWatchIndex++] = strdup(fullPath);
-                    if (fileToWatch[fileToWatchIndex - 1] == NULL)
-                    {
-                        perror("Erreur lors de l'allocation de mémoire");
-                        exit(EXIT_FAILURE);
-                    }
-                }
-
-                closedir(dir);
-            }
-            else // Si c'est un fichier
-            {
-                char *lastSlash = strrchr(filePaths[i], '/');
-                if (lastSlash != NULL)
-                {
-                    char *afterSlash = strdup(lastSlash + 1);
-
-                    if (afterSlash == NULL)
-                    {
-                        perror("Erreur lors de l'allocation de mémoire");
-                        exit(EXIT_FAILURE);
-                    }
-
-                    fileToWatch[fileToWatchIndex++] = strdup(afterSlash);
-                    if (fileToWatch[fileToWatchIndex - 1] == NULL)
-                    {
-                        perror("Erreur lors de l'allocation de mémoire");
-                        exit(EXIT_FAILURE);
-                    }
-
-                    free(afterSlash);
-                }
-            }
-        }
-        else
-        {
-            perror("stat");
-            exit(EXIT_FAILURE);
-        }
-    }
-
-    // Terminer le tableau des noms de fichiers à surveiller avec NULL
-    fileToWatch[fileToWatchIndex] = NULL;
-}
 
 bool fileExists(const char *path)
 {
@@ -629,7 +563,8 @@ bool fileExists(const char *path)
     return false;
 }
 
-void setFileSensitivity(FileInfo *fileInfo, bool sensitive) {
+void setFileSensitivity(FileInfo *fileInfo, bool sensitive)
+{
     fileInfo->sensitive = sensitive;
 }
 
@@ -652,7 +587,6 @@ void addFile(const char *path, bool sensitive, FileInfo *fileInfos)
 
     fprintf(fichier, "%s %d %s\n", path, sensitive ? 1 : 0, calculateSHA512(path));
 
-
     if (fileCount < MAX_FILES)
     {
         strncpy(fileInfos[fileCount].filename, path, MAX_PATH_LENGTH - 1);
@@ -660,8 +594,10 @@ void addFile(const char *path, bool sensitive, FileInfo *fileInfos)
         fileInfos[fileCount].sensitive = sensitive;
         fileCount++;
 
-        if (sensitive) {
-            if (chmod(path, 0640) != 0) {
+        if (sensitive)
+        {
+            if (chmod(path, 0640) != 0)
+            {
                 fprintf(stderr, "Erreur lors de la modification des autorisations du fichier %s\n", path);
             }
         }
@@ -671,30 +607,34 @@ void addFile(const char *path, bool sensitive, FileInfo *fileInfos)
         fprintf(stderr, "Nombre maximal de fichiers atteint.\n");
     }
 
-
     fclose(fichier);
     printf("Fichier ajouté avec succès : %s\n", path);
 }
 
-void removeFilePathByIndex(int index) {
+void removeFilePathByIndex(int index)
+{
     FILE *fichier = fopen(configFile, "r");
-    if (fichier == NULL) {
+    if (fichier == NULL)
+    {
         fprintf(stderr, "Erreur lors de l'ouverture du fichier de configuration\n");
         exit(1);
     }
 
     FILE *tempFile = fopen("./temp.txt", "w");
-    if (tempFile == NULL) {
+    if (tempFile == NULL)
+    {
         fprintf(stderr, "Erreur lors de l'ouverture du fichier temporaire\n");
         exit(1);
     }
 
     char line[MAX_PATH_LENGTH];
     int lineNumber = 0;
-    while (fgets(line, sizeof(line), fichier) != NULL) {
+    while (fgets(line, sizeof(line), fichier) != NULL)
+    {
         lineNumber++;
 
-        if (lineNumber != index) {
+        if (lineNumber != index)
+        {
             fputs(line, tempFile);
         }
     }
@@ -733,16 +673,19 @@ void displayFiles()
     fclose(fichier);
 }
 
-char* calculateSHA512(const char *path) {
+char *calculateSHA512(const char *path)
+{
 
-    if (stat(path, &buf) != 0 || S_ISDIR(buf.st_mode)) {
-        fprintf(stderr, "Le chemin spécifié n'est pas un fichier valide.\n");
+    if (stat(path, &buf) != 0 || S_ISDIR(buf.st_mode))
+    {
+        fprintf(stderr, "\n");
         return NULL;
     }
     snprintf(command, sizeof(command), "sha512sum %s", path);
 
     FILE *pipe = popen(command, "r");
-    if (pipe == NULL) {
+    if (pipe == NULL)
+    {
         fprintf(stderr, "Erreur lors de l'exécution de la commande.\n");
         return NULL;
     }
@@ -753,7 +696,8 @@ char* calculateSHA512(const char *path) {
     output[strcspn(output, "\n")] = '\0';
 
     char *hash = strtok(output, " ");
-    if (hash == NULL) {
+    if (hash == NULL)
+    {
         fprintf(stderr, "Erreur lors de l'allocation de mémoire.\n");
         return NULL;
     }
@@ -782,8 +726,14 @@ void *monitorFilesHash()
                 char *hash = calculateSHA512(path);
                 if (hash == NULL)
                 {
-                    fprintf(stderr, "Error calculating hash for file: %s\n", path);
-                    continue;
+                    if (stat(path, &buf) != 0 || S_ISDIR(buf.st_mode))
+                    {
+                        fprintf(stderr, "\n");
+                        return NULL;
+                    }else{
+                        fprintf(stderr, "Error calculating hash for file: %s\n", path);
+                        continue;
+                    }
                 }
 
                 if (strcmp(hash, storedHash) != 0)
@@ -801,9 +751,6 @@ void *monitorFilesHash()
     }
     return NULL;
 }
-
-
-
 
 void onAddButtonClicked(GtkWidget *widget, gpointer data)
 {
@@ -897,7 +844,8 @@ void update_textview(const gchar *text)
     gtk_text_buffer_insert(buffer, &iter, text, -1);
 }
 
-void on_dialog_response(GtkDialog *dialog, gint response_id, gpointer user_data) {
+void on_dialog_response(GtkDialog *dialog, gint response_id, gpointer user_data)
+{
     gtk_widget_destroy(GTK_WIDGET(dialog));
 }
 
@@ -961,13 +909,16 @@ void onDisplayButtonClicked(GtkWidget *widget, gpointer data)
     gtk_widget_destroy(dialog);
 }
 
-gboolean refreshLog(gpointer data) {
-    if (logTextView == NULL) {
+gboolean refreshLog(gpointer data)
+{
+    if (logTextView == NULL)
+    {
         return G_RESOURCE_ERROR;
     }
 
     FILE *logFile = fopen("file_monitor.log", "r");
-    if (logFile == NULL) {
+    if (logFile == NULL)
+    {
         printf("Impossible d'ouvrir le fichier de journalisation.\n");
         return G_SOURCE_CONTINUE;
     }
@@ -976,7 +927,8 @@ gboolean refreshLog(gpointer data) {
     gtk_text_buffer_set_text(buffer, "", -1);
 
     char line[512];
-    while (fgets(line, sizeof(line), logFile) != NULL) {
+    while (fgets(line, sizeof(line), logFile) != NULL)
+    {
         gtk_text_buffer_insert_at_cursor(buffer, line, -1);
     }
     fclose(logFile);
@@ -984,7 +936,8 @@ gboolean refreshLog(gpointer data) {
     return G_SOURCE_CONTINUE;
 }
 
-void *fileMonitoringFunction() {
+void *fileMonitoringFunction()
+{
     char **filePaths = getPathsFromFile();
     int numPaths = 0;
     while (filePaths[numPaths] != NULL)
@@ -1001,25 +954,28 @@ void *fileMonitoringFunction() {
     return NULL;
 }
 
-void onLogWindowDestroy(GtkWidget *widget, gpointer data) {
-    if (logTextView != NULL) {
+void onLogWindowDestroy(GtkWidget *widget, gpointer data)
+{
+    if (logTextView != NULL)
+    {
         gtk_widget_destroy(logTextView);
         logTextView = NULL;
     }
 }
 
-void onLogButtonClicked(GtkWidget *widget, gpointer data) {
+void onLogButtonClicked(GtkWidget *widget, gpointer data)
+{
     logWindow = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(logWindow), "Journal des événements");
     gtk_container_set_border_width(GTK_CONTAINER(logWindow), 10);
     gtk_window_resize(GTK_WINDOW(logWindow), 1300, 300);
-    
+
     g_signal_connect(logWindow, "destroy", G_CALLBACK(onLogWindowDestroy), NULL);
 
     GtkWidget *scrolledWindow = gtk_scrolled_window_new(NULL, NULL);
     gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolledWindow),
                                    GTK_POLICY_ALWAYS,
-                                   GTK_POLICY_ALWAYS); 
+                                   GTK_POLICY_ALWAYS);
 
     gtk_container_add(GTK_CONTAINER(logWindow), scrolledWindow);
 
