@@ -1,9 +1,9 @@
 #include "file_permissions.h"
 
 int gestiondroit(){
-	char nomfichier[100];
-	char nomfichier2[100];	// Pour éviter que la fonction proprietefile() interfere avec le chemin absolue a cause de la fonction dirname() 
-	char nomfichier3[100];	// Entrée manuelle d'un chemin vers un fichier
+	char nomfichier[512];
+	char nomfichier2[512];	// Pour éviter que la fonction proprietefile() interfere avec le chemin absolue a cause de la fonction dirname() 
+	char nomfichier3[512];	// Entrée manuelle d'un chemin vers un fichier
 	int racinedir;	// Pour vérifier si le fichier sélectionné est un répertoire racine (dans "/")
 	int racinedir2; // Pour entrée manuelle du chemin vers un fichier
 

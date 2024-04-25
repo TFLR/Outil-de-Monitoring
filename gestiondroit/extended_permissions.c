@@ -27,7 +27,7 @@ void ajoutepermsetendue(char *fichier, int addidetendue) {
 		return;
 }
 
-void supprimepermsetendue(char *fichier, int addidetendue) {
+void supprimepermsetendue(char *fichier, int suppidetendue) {
 
 	struct stat infofichier;
 	char *copyfichier = malloc(strlen(fichier) + 1);
@@ -40,11 +40,11 @@ void supprimepermsetendue(char *fichier, int addidetendue) {
 	}
 	mode_t newpermsetendue = infofichier.st_mode;
 
-	if (addidetendue == 4) {
+	if (suppidetendue == 4) {
 		newpermsetendue &= ~S_ISUID;
-	} else if (addidetendue == 5){
+	} else if (suppidetendue == 5){
 		newpermsetendue &= ~S_ISGID;
-	} else if (addidetendue == 6){
+	} else if (suppidetendue == 6){
 		newpermsetendue &= ~S_ISVTX;
 	}
 		chmod(fichier, newpermsetendue);
