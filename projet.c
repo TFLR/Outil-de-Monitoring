@@ -708,7 +708,7 @@ char *calculateSHA512(const char *path)
 
     if (stat(path, &buf) != 0 || S_ISDIR(buf.st_mode))
     {
-        fprintf(stderr, "\n");
+        fprintf(stderr, " ");
         return NULL;
     }
     snprintf(command, sizeof(command), "sha512sum %s", path);
@@ -758,7 +758,7 @@ void *monitorFilesHash()
                 {
                     if (stat(path, &buf) != 0 || S_ISDIR(buf.st_mode))
                     {
-                        fprintf(stderr, "\n");
+                        fprintf(stderr, " ");
                     }else{
                         fprintf(stderr, "Error calculating hash for file: %s\n", path);
                     }
