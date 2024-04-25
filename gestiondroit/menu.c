@@ -133,7 +133,7 @@ int menupermsetendue(){
 				while (1) {
 
 					printf("\n\nQuelle permissions étendues voulez-vous ajouter ?\n");
-					printf("1. Set owner User ID (SUID)\n2. Set owner Group ID (GUID)\n3. Sticky Bit\n4. Quitter\n\nVotre choix > ");
+					printf("1. Set owner User ID (SUID)\n2. Set owner Group ID (GUID)\n3. Sticky Bit\n4. Definitions de chaque permissions étendues\n5. Quitter\n\nVotre choix > ");
 
 					scanf("%s", input2);
 					if (isdigit(input2[0])) {
@@ -145,6 +145,10 @@ int menupermsetendue(){
 						} else if (changepermissionetendue == 3) {
 							return 61;
 						} else if (changepermissionetendue == 4) {
+							printf("\nLe Set owner User ID (SUID) permet d’exécuter un fichier exécutable avec les droits de l’utilisateur propriétaire du fichier plutôt qu’avec les privilèges de l’utilisateur qui l’a lancé. Son attribution est utile seulement pour les fichiers exécutable.\n");
+							printf("\nLe Set owner Group ID (SGID) permet d'exécuter un fichier exécutable avec les droits du groupe propriètaire plutôt qu'avec les privilèges du groupe de l'utilisateur. Si le fichier est un répertoire alors les fichiers crée sous ce répertoire appartiennent au groupe propriètaire du répertoire.\n");
+							printf("\nLe Sticky Bit permet strictement la suppression de fichiers d'un répertoire qu'à l'utilisateur propriètaire. L'attribution du Sticky Bit est seulement utile sur les répertoires. \n");
+						} else if (changepermissionetendue == 5) {
 							return 0;
 						} else {
 							printf("\n[ ! ] Veuillez choisir une des options disponibles ci-dessous [ ! ]\n");
@@ -157,7 +161,7 @@ int menupermsetendue(){
 			case 2:
 				while (1) {
 					printf("\n\nQuelle permissions étendues voulez-vous supprimer ?\n");
-					printf("1. Set owner User ID (SUID)\n2. Set owner Group ID (GUID)\n3. Sticky Bit\n4. Quitter\n\nVotre choix > ");
+					printf("1. Set owner User ID (SUID)\n2. Set owner Group ID (GUID)\n3. Sticky Bit\n4. Definitions de chaque permissions étendues\n5. Quitter\n\nVotre choix > ");
 
 					scanf("%s", input2);
 					if (isdigit(input2[0])) {
@@ -169,6 +173,10 @@ int menupermsetendue(){
 						} else if (changepermissionetendue == 3) {
 							return 62;
 						} else if (changepermissionetendue == 4) {
+							printf("\nLe Set owner User ID (SUID) permet d’exécuter un fichier exécutable avec les droits de l’utilisateur propriétaire du fichier plutôt qu’avec les privilèges de l’utilisateur qui l’a lancé. Son attribution est utile seulement pour les fichiers exécutable.\n");
+							printf("\nLe Set owner Group ID (SGID) permet d'exécuter un fichier exécutable avec les droits du groupe propriètaire plutôt qu'avec les privilèges du groupe de l'utilisateur. Si le fichier est un répertoire alors les fichiers crée sous ce répertoire appartiennent au groupe propriètaire du répertoire.\n");
+							printf("\nLe Sticky Bit permet strictement la suppression de fichiers d'un répertoire qu'à l'utilisateur propriètaire. L'attribution du Sticky Bit est seulement utile sur les répertoires. \n");
+						}else if (changepermissionetendue == 5) {
 							return 0;
 						} else {
 							printf("\n[ ! ] Veuillez choisir une des options disponibles ci-dessous [ ! ]\n");
