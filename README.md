@@ -43,15 +43,17 @@
 
 ## Fonctionalité 
 
-#### Surveillance des Propriétés des Fichiers
+#### Surveillance des fichiers: Utilise inotify pour surveiller les changements de permissions en temps réel.
 
-#### Ajout ou suppression des fichiers à surveiller
+#### Gestion des permissions: Permet aux utilisateurs de modifier les permissions des fichiers via une interface graphique ou un menu en ligne de commande.
 
-#### Gestion des Droits d'Accès
+#### Logging: Les événements importants comme les changements de permissions sont enregistrés dans un fichier log.
 
-#### Sécurité et Intégrité des Données
+#### Interface Graphique: Fournie par GTK+, elle offre une manipulation intuitive des fonctionnalités du programme.
 
-#### Interface Utilisateur
+#### Gestion de Sensibilité: Capacité de marquer des fichiers comme sensibles, influençant la façon dont ils sont surveillés et rapporté
+
+
 ## Demo
 
 ![image](https://github.com/TFLR/Outil-de-Monitoring/assets/72856494/0f3c1af1-5969-4063-b924-c529932d1c90)
